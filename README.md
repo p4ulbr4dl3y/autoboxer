@@ -1,117 +1,45 @@
-# Locate Anything Auto-Labeler API
+# Autoboxer: Model-Assisted Image Labeling Studio
 
-A FastAPI service built for automatic bounding box detection, segmentation (using SAM3 or BiRefNet), and image classification (SigLIP2 + FAISS vector lookup).
-
-The API runs optimized MLX models on Apple Silicon and provides clean bounding boxes, segmentation polygons, and classification tags suitable for integration with data labeling tools (like CVAT, Label Studio, etc.).
+This repository contains the backend and frontend for **Autoboxer**, a full-featured web application designed for automatic and manual bounding box labeling, object segmentation, and target classification using Locate Anything, SAM3, and SigLIP2.
 
 ---
 
-## 🛠️ Prerequisites
+## 📂 Repository Structure
 
-- **Apple Silicon Mac** (M1/M2/M3/M4) for MLX performance.
-- Python 3.10+ (managed automatically via `uv`).
-- `uv` package manager installed.
+- [backend/](file:///Users/yegor/autoboxer/backend): FastAPI service managing the SQLite database, custom classes, image file uploads, background batch annotations, and YOLO/COCO dataset exports.
+- [frontend/](file:///Users/yegor/autoboxer/frontend): React, TypeScript, and Tailwind CSS v4 single-page application (SPA) containing the interactive gallery dashboard and annotation editor canvas.
 
 ---
 
-## 🚀 Running the API
+## 🚀 Getting Started
 
-You can start the development server using:
+### 1. Start the Backend API
+First, start the FastAPI server in the `backend` folder:
 
 ```bash
+cd backend
 uv run main.py
 ```
 
-This starts the FastAPI server on `http://localhost:8000` with hot-reloading enabled.
+- API Base: `http://localhost:8000`
+- Swagger Docs: `http://localhost:8000/docs`
 
-You can inspect the interactive OpenAPI documentation at:
-- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
-- ReDoc: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+### 2. Start the Frontend Client
+In a new terminal window, start the React dev server in the `frontend` folder:
 
----
-
-## 📡 API Endpoints
-
-### 1. `POST /api/v1/label`
-Upload an image, locate bounding boxes, segment boundaries, and classify targets. Returns JSON metadata.
-
-#### Parameters (Multipart Form Data):
-- `file` (File, required): The target image file.
-- `prompt` (Text, default: `Locate full-body LEGO minifigure characters.`): Detection prompt.
-- `method` (Text, default: `sam`): Segmentation method (`sam`, `birefnet`, or `none`).
-- `threshold` (Float, default: `0.3`): Mask segmentation confidence threshold.
-- `classify` (Boolean, default: `true`): Perform SigLIP2 + FAISS classification.
-
-#### Example Response:
-```json
-{
-  "filename": "lego_minifigures.png",
-  "width": 708,
-  "height": 468,
-  "detections": [
-    {
-      "box_id": 1,
-      "bbox": [0, 26, 193, 408],
-      "bbox_normalized": [0, 56, 273, 873],
-      "segmentation": {
-        "method": "sam3",
-        "score": 0.6579,
-        "polygon": [
-          [33, 26],
-          [27, 125],
-          [38, 143]
-        ]
-      },
-      "classification": {
-        "label": "min199",
-        "score": 0.0484,
-        "top5": [
-          { "label": "min199", "score": 0.0484 },
-          { "label": "min160", "score": 0.0530 }
-        ]
-      }
-    }
-  ]
-}
-```
-
-### 2. `POST /api/v1/label-visualize`
-Upload an image and parameters to receive the **annotated image file directly** (JPEG format). Perfect for quick visual verification.
-
-Features included in visualization:
-- Colored boundary outline for bounding boxes.
-- Semi-transparent colored overlay highlighting the exact SAM3/BiRefNet segmented mask.
-- Dynamic text labels hovering over boxes displaying `class_name (score)`.
-
----
-
-## 💻 Client Integration Examples
-
-### Python (using `requests`)
-```python
-import requests
-
-url = "http://localhost:8000/api/v1/label"
-files = {"file": open("image.jpg", "rb")}
-data = {
-    "prompt": "Locate full-body LEGO minifigure characters.",
-    "method": "sam",
-    "threshold": "0.3",
-    "classify": "true"
-}
-
-response = requests.post(url, files=files, data=data)
-print(response.json())
-```
-
-### cURL
 ```bash
-curl -X POST "http://localhost:8000/api/v1/label" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@/path/to/your/image.png;type=image/png" \
-  -F "prompt=Locate LEGO minifigures" \
-  -F "method=sam" \
-  -F "threshold=0.3" \
-  -F "classify=true"
+cd frontend
+npm run dev
 ```
+
+- Web Client Base: `http://localhost:5173` (or the address printed in the dev console).
+
+---
+
+## 🎨 Features & Capabilities
+
+- **Project Galleries**: Organizes annotations by project/datasets.
+- **AI Auto-Labeling**: Integrates Locate Anything + SAM3 + SigLIP2/FAISS vector classification.
+- **Background Queues**: Annotate entire directories of images concurrently without freezing the UI.
+- **Interactive Canvas**: Drag-and-resize bounding boxes, select classes, and preview SAM3 boundaries in real time.
+- **Format Export**: Direct ZIP download of labeled datasets in standard YOLO or COCO JSON formats.

@@ -26,7 +26,7 @@ from app.models import (
 from app.pipeline import run_pipeline, ModelManager
 from app.utils import visualize_predictions
 
-DATA_DIR = "/Users/yegor/autoboxer/data"
+DATA_DIR = "/Users/yegor/autoboxer/backend/data"
 
 # Lifespan manager to pre-warm the primary LocateAnything model and initialize DB
 @asynccontextmanager

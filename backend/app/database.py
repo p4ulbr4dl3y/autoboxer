@@ -2,7 +2,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_FILE = "/Users/yegor/autoboxer/autoboxer.db"
+DATABASE_FILE = "/Users/yegor/autoboxer/backend/autoboxer.db"
 DATABASE_URL = f"sqlite:///{DATABASE_FILE}"
 
 # Connect args needed for SQLite to enforce foreign key constraints
