@@ -30,13 +30,8 @@ export function useProjects() {
   }, [fetchProjects]);
 
   const deleteProject = useCallback(async (id: number) => {
-    if (!confirm('Are you sure you want to delete this project? All images and annotations will be deleted.')) return;
-    try {
-      await api.projects.delete(id);
-      fetchProjects();
-    } catch (e) {
-      console.error(e);
-    }
+    await api.projects.delete(id);
+    fetchProjects();
   }, [fetchProjects]);
 
   return { projects, stats, fetchProjects, fetchStats, deleteProject };

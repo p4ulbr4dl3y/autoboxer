@@ -13,17 +13,20 @@ interface ProjectGalleryProps {
   setClasses: React.Dispatch<React.SetStateAction<ClassCategory[]>>;
   onOpenEditor: (imageId: number) => void;
   onBatchLabel: () => void;
+  onDeleteClass: (classId: number) => void;
   onRefresh: () => void;
 }
 
 export default function ProjectGallery({
   project, stats, images, classes, statusFilter, isBatchLabeling,
-  setStatusFilter, setClasses, onOpenEditor, onBatchLabel, onRefresh,
+  setStatusFilter, setClasses, onOpenEditor, onBatchLabel, onDeleteClass, onRefresh,
 }: ProjectGalleryProps) {
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [newClassColor, setNewClassColor] = useState('#34C759');
+  const [classError, setClassError] = useState<string | null>(null);
+
   const handleUploadImages = async () => {
     if (!uploadFiles) return;
     setIsUploading(true);
@@ -43,12 +46,13 @@ export default function ProjectGallery({
   const handleAddClass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClassName) return;
+    setClassError(null);
     try {
       const added = await api.classes.create(project.id, { name: newClassName, color: newClassColor });
       setClasses(prev => [...prev, added]);
       setNewClassName('');
     } catch (e: any) {
-      alert(e.message);
+      setClassError(e.message);
     }
   };
 
@@ -179,7 +183,7 @@ export default function ProjectGallery({
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
           <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Label Classes ({classes.length})</h3>
           <form onSubmit={handleAddClass} className="flex gap-2 mb-4">
-            <input type="text" required value={newClassName} onChange={e => setNewClassName(e.target.value)}
+            <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
               placeholder="New class name..."
               className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500" />
             <input type="color" value={newClassColor} onChange={e => setNewClassColor(e.target.value)}
@@ -191,6 +195,9 @@ export default function ProjectGallery({
               </svg>
             </button>
           </form>
+          {classError && (
+            <p className="text-red-400 text-[11px] mb-3 px-1">{classError}</p>
+          )}
           <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
             {classes.length === 0 ? (
               <p className="text-slate-500 text-xs italic">No custom classes registered yet.</p>
@@ -199,7 +206,13 @@ export default function ProjectGallery({
                 <div key={cls.id} className="bg-slate-950/60 border border-slate-850 p-2.5 rounded-xl space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
-                    <span className="text-slate-300 font-mono font-bold truncate">{cls.name}</span>
+                    <span className="text-slate-300 font-mono font-bold truncate flex-1">{cls.name}</span>
+                    <button onClick={() => onDeleteClass(cls.id)}
+                      className="text-slate-600 hover:text-red-400 p-1 rounded transition-colors flex-shrink-0">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
                   <div>
                     <label className="block text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Locating Prompt</label>

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.db_models import Project, ClassModel
+from app.db_models import Project, ClassModel, ImageModel, Annotation
 from app.models import ClassCreate, ClassUpdate, ClassResponse
 
 router = APIRouter(prefix="/api/v1", tags=["classes"])
@@ -52,3 +52,37 @@ def update_class(class_id: int, class_update: ClassUpdate, db: Session = Depends
     db.commit()
     db.refresh(db_class)
     return db_class
+
+
+@router.delete("/classes/{class_id}")
+def delete_class(class_id: int, db: Session = Depends(get_db)):
+    """Delete a class and mark affected images as unlabeled."""
+    db_class = db.query(ClassModel).filter(ClassModel.id == class_id).first()
+    if not db_class:
+        raise HTTPException(status_code=404, detail="Class category not found")
+
+    project_id = db_class.project_id
+    class_name = db_class.name
+
+    # Find images that have annotations with this class label
+    affected_image_ids = (
+        db.query(Annotation.image_id)
+        .filter(Annotation.label == class_name)
+        .distinct()
+        .all()
+    )
+    affected_image_ids = [row[0] for row in affected_image_ids]
+
+    # Delete annotations with this class label
+    db.query(Annotation).filter(Annotation.label == class_name).delete()
+
+    # Mark affected images as unlabeled
+    if affected_image_ids:
+        db.query(ImageModel).filter(
+            ImageModel.id.in_(affected_image_ids),
+            ImageModel.project_id == project_id
+        ).update({ImageModel.status: "unlabeled"}, synchronize_session="fetch")
+
+    db.delete(db_class)
+    db.commit()
+    return {"detail": "Class deleted", "affected_images": len(affected_image_ids)}

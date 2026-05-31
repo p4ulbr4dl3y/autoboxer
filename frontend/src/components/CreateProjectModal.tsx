@@ -13,11 +13,14 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
   const [projectClasses, setProjectClasses] = useState<{ name: string; prompt: string; color: string }[]>([
     { name: '', prompt: '', color: '#34C759' }
   ]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!name) return;
 
     const classesList = projectClasses
@@ -29,10 +32,11 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
       .filter(cls => cls.name.length > 0);
 
     if (classesList.length === 0) {
-      alert('Please specify at least one class category.');
+      setError('Please specify at least one class category.');
       return;
     }
 
+    setIsSubmitting(true);
     try {
       await api.projects.create({
         name,
@@ -44,7 +48,9 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
       onClose();
       onCreated();
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      setError(e.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -69,7 +75,7 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Project Name</label>
-            <input type="text" required value={name} onChange={e => setName(e.target.value)}
+            <input type="text" required value={name} onChange={e => { setName(e.target.value); setError(null); }}
               placeholder="e.g. Traffic Sign Detection"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors" />
           </div>
@@ -109,6 +115,7 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
                           u[index].prompt = e.target.value ? `Locate ${e.target.value}.` : '';
                         }
                         setProjectClasses(u);
+                        setError(null);
                       }}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500" />
                   </div>
@@ -130,11 +137,16 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
               ))}
             </div>
           </div>
+          {error && (
+            <p className="text-red-400 text-xs px-1">{error}</p>
+          )}
           <div className="flex gap-4 pt-4 mt-2">
             <button type="button" onClick={onClose}
-              className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-330 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
-            <button type="submit"
-              className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-indigo-500/10 transition-colors">Create</button>
+              className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
+            <button type="submit" disabled={isSubmitting}
+              className="flex-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-indigo-500/10 transition-colors">
+              {isSubmitting ? 'Creating...' : 'Create'}
+            </button>
           </div>
         </form>
       </div>

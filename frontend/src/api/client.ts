@@ -47,6 +47,8 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
+    delete: (classId: number) =>
+      request<any>(`/api/v1/classes/${classId}`, { method: 'DELETE' }),
   },
 
   // Images

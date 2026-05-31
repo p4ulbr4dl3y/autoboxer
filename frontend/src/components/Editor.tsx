@@ -1,19 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api/client';
-import type { Annotation, ClassCategory, ImageItem, Project } from '../types';
+import type { Annotation, ClassCategory, ImageItem } from '../types';
 
 interface EditorProps {
   currentImageId: number;
   images: ImageItem[];
   classes: ClassCategory[];
-  project: Project | undefined;
   onSaveAndExit: () => void;
   onImageChange: (imageId: number) => void;
   setImages: React.Dispatch<React.SetStateAction<ImageItem[]>>;
 }
 
 export default function Editor({
-  currentImageId, images, classes, project, onSaveAndExit, onImageChange, setImages,
+  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages,
 }: EditorProps) {
   const currentImage = images.find(img => img.id === currentImageId);
   const currentImageIndex = images.findIndex(img => img.id === currentImageId);

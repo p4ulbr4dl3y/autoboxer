@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard';
 import CreateProjectModal from './components/CreateProjectModal';
 import ProjectGallery from './components/ProjectGallery';
 import Editor from './components/Editor';
+import ConfirmModal from './components/ConfirmModal';
 
 export default function App() {
   const [view, setView] = useState<'dashboard' | 'project' | 'editor'>('dashboard');
@@ -14,6 +15,11 @@ export default function App() {
   const [currentImageId, setCurrentImageId] = useState<number | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isBatchLabeling, setIsBatchLabeling] = useState(false);
+
+  // Confirmation / info modals
+  const [deleteProjectId, setDeleteProjectId] = useState<number | null>(null);
+  const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
+  const [deleteClassInfo, setDeleteClassInfo] = useState<{ id: number; name: string } | null>(null);
 
   const { projects, stats, fetchProjects, fetchStats, deleteProject } = useProjects();
   const {
@@ -50,6 +56,10 @@ export default function App() {
 
   const handleBatchLabel = useCallback(async () => {
     if (!selectedProjectId) return;
+    if (images.length === 0) {
+      setErrorModal({ title: 'No Images', message: 'Upload some images before running auto-labeling.' });
+      return;
+    }
     setIsBatchLabeling(true);
     try {
       await api.projects.batchAutoLabel(selectedProjectId, {
@@ -57,25 +67,53 @@ export default function App() {
       });
       await fetchStats(selectedProjectId);
 
-      // Poll until batch is done
       const poll = async () => {
-        const s = await api.projects.stats(selectedProjectId);
-        stats[selectedProjectId] = s;
-        if (s.batch_in_progress) {
-          await fetchProjectImages(selectedProjectId);
-          setTimeout(poll, 2000);
-        } else {
+        try {
+          const s = await api.projects.stats(selectedProjectId);
+          if (s.batch_in_progress) {
+            await fetchProjectImages(selectedProjectId);
+            setTimeout(poll, 2000);
+          } else {
+            setIsBatchLabeling(false);
+            await fetchProjectImages(selectedProjectId);
+            await fetchStats(selectedProjectId);
+          }
+        } catch {
           setIsBatchLabeling(false);
-          await fetchProjectImages(selectedProjectId);
-          await fetchStats(selectedProjectId);
         }
       };
       setTimeout(poll, 2000);
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
+      setErrorModal({ title: 'Batch Labeling Failed', message: e.message });
       setIsBatchLabeling(false);
     }
-  }, [selectedProjectId, fetchStats, fetchProjectImages]);
+  }, [selectedProjectId, images.length, fetchStats, fetchProjectImages]);
+
+  const handleConfirmDeleteProject = useCallback(async () => {
+    if (deleteProjectId === null) return;
+    try {
+      await deleteProject(deleteProjectId);
+      if (selectedProjectId === deleteProjectId) {
+        setSelectedProjectId(null);
+        setView('dashboard');
+      }
+    } catch (e: any) {
+      setErrorModal({ title: 'Delete Failed', message: e.message });
+    }
+  }, [deleteProjectId, selectedProjectId, deleteProject]);
+
+  const handleDeleteClass = useCallback(async (classId: number) => {
+    try {
+      await api.classes.delete(classId);
+      setClasses(prev => prev.filter(c => c.id !== classId));
+      if (selectedProjectId) {
+        await fetchProjectImages(selectedProjectId);
+        await fetchStats(selectedProjectId);
+      }
+    } catch (e: any) {
+      setErrorModal({ title: 'Delete Class Failed', message: e.message });
+    }
+  }, [selectedProjectId, setClasses, fetchProjectImages, fetchStats]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -86,7 +124,7 @@ export default function App() {
           <>
             <Dashboard
               projects={projects} stats={stats}
-              onOpenProject={handleOpenProject} onDeleteProject={deleteProject}
+              onOpenProject={handleOpenProject} onDeleteProject={id => setDeleteProjectId(id)}
               onCreateNew={() => setIsCreateModalOpen(true)}
             />
             <CreateProjectModal
@@ -104,6 +142,10 @@ export default function App() {
             statusFilter={statusFilter} isBatchLabeling={isBatchLabeling}
             setStatusFilter={setStatusFilter} setClasses={setClasses}
             onOpenEditor={handleOpenEditor} onBatchLabel={handleBatchLabel}
+            onDeleteClass={classId => {
+              const cls = classes.find(c => c.id === classId);
+              if (cls) setDeleteClassInfo({ id: classId, name: cls.name });
+            }}
             onRefresh={() => { fetchProjectDetails(selectedProjectId); fetchStats(selectedProjectId); }}
           />
         )}
@@ -111,13 +153,45 @@ export default function App() {
         {view === 'editor' && currentImageId && (
           <Editor
             currentImageId={currentImageId} images={images} classes={classes}
-            project={selectedProject}
             onSaveAndExit={handleSaveAndExit}
             onImageChange={setCurrentImageId}
             setImages={setImages}
           />
         )}
       </main>
+
+      {/* Delete project confirmation */}
+      <ConfirmModal
+        isOpen={deleteProjectId !== null}
+        title="Delete Project"
+        message="Are you sure you want to delete this project? All images and annotations will be permanently removed."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleConfirmDeleteProject}
+        onClose={() => setDeleteProjectId(null)}
+      />
+
+      {/* Delete class confirmation */}
+      <ConfirmModal
+        isOpen={deleteClassInfo !== null}
+        title="Delete Class"
+        message={`Delete "${deleteClassInfo?.name}"? All annotations of this class will be removed and affected images will be marked as unlabeled.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => { if (deleteClassInfo) handleDeleteClass(deleteClassInfo.id); }}
+        onClose={() => setDeleteClassInfo(null)}
+      />
+
+      {/* Error / info modal */}
+      <ConfirmModal
+        isOpen={errorModal !== null}
+        title={errorModal?.title || 'Error'}
+        message={errorModal?.message || ''}
+        confirmLabel="OK"
+        variant="info"
+        onConfirm={() => {}}
+        onClose={() => setErrorModal(null)}
+      />
     </div>
   );
 }
