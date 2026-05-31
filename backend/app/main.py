@@ -18,10 +18,12 @@ from app.models import (
     ProjectCreate,
     ProjectResponse,
     ClassCreate,
+    ClassUpdate,
     ClassResponse,
     ImageResponse,
     AnnotationCreate,
-    AnnotationResponse
+    AnnotationResponse,
+    BatchAutoLabelRequest
 )
 from app.pipeline import run_pipeline, ModelManager
 from app.utils import visualize_predictions
@@ -95,6 +97,23 @@ def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     db.add(new_project)
     db.commit()
     db.refresh(new_project)
+    
+    # Save initial project classes if provided
+    colors = ["#34C759", "#007AFF", "#FF9500", "#FF3B30", "#AF52DE", "#5AC8FA"]
+    if project.classes:
+        for idx, cls_create in enumerate(project.classes):
+            color = cls_create.color if cls_create.color else colors[idx % len(colors)]
+            prompt = cls_create.prompt if cls_create.prompt else f"Locate {cls_create.name.strip()}."
+            new_class = ClassModel(
+                project_id=new_project.id,
+                name=cls_create.name.strip(),
+                color=color,
+                prompt=prompt
+            )
+            db.add(new_class)
+        db.commit()
+        db.refresh(new_project)
+        
     return new_project
 
 
@@ -147,15 +166,36 @@ def create_project_class(project_id: int, project_class: ClassCreate, db: Sessio
     if existing:
         raise HTTPException(status_code=400, detail="Class category already exists in this project")
 
+    prompt = project_class.prompt if project_class.prompt else f"Locate {project_class.name}."
     new_class = ClassModel(
         project_id=project_id,
         name=project_class.name,
-        color=project_class.color
+        color=project_class.color,
+        prompt=prompt
     )
     db.add(new_class)
     db.commit()
     db.refresh(new_class)
     return new_class
+
+
+@app.put("/api/v1/classes/{class_id}", response_model=ClassResponse)
+def update_class(class_id: int, class_update: ClassUpdate, db: Session = Depends(get_db)):
+    """Update class name, color, or locating prompt."""
+    db_class = db.query(ClassModel).filter(ClassModel.id == class_id).first()
+    if not db_class:
+        raise HTTPException(status_code=404, detail="Class category not found")
+        
+    if class_update.name is not None:
+        db_class.name = class_update.name.strip()
+    if class_update.color is not None:
+        db_class.color = class_update.color
+    if class_update.prompt is not None:
+        db_class.prompt = class_update.prompt
+        
+    db.commit()
+    db.refresh(db_class)
+    return db_class
 
 
 # --- Image Management & Upload Endpoints ---
@@ -308,12 +348,15 @@ def update_image_annotations(
 @app.post("/api/v1/images/{image_id}/auto-label", response_model=List[AnnotationResponse])
 def auto_label_image_file(
     image_id: int,
-    prompt: Optional[str] = None,
+    prompt: Optional[str] = None,          # Manual override prompt (if provided)
+    mode: str = "overwrite",
+    filter_by_classes: bool = True,
+    target_classes: Optional[str] = None,  # Comma-separated class names to target
     db: Session = Depends(get_db)
 ):
     """
     Trigger the Locate Anything auto-labeling pipeline on an image registered in database.
-    Saves the results directly as annotations, updates image status to 'labeled',
+    Saves the results directly as annotations, updates image status,
     and returns the saved annotations.
     """
     db_image = db.query(ImageModel).filter(ImageModel.id == image_id).first()
@@ -321,7 +364,8 @@ def auto_label_image_file(
         raise HTTPException(status_code=404, detail="Image not found")
         
     project = db_image.project
-    run_prompt = prompt if prompt is not None else project.default_prompt
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
 
     if not os.path.exists(db_image.filepath):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
@@ -330,37 +374,100 @@ def auto_label_image_file(
     db.commit()
 
     try:
-        results = run_pipeline(
-            image_path=db_image.filepath,
-            prompt=run_prompt
-        )
-        
-        # Clear existing annotations
-        db.query(Annotation).filter(Annotation.image_id == image_id).delete()
-        
-        new_annotations = []
-        for det in results["detections"]:
-            # If model didn't return a tag inside <ref>, we fallback to the first project category, or 'object'
-            label = det["label"]
-            if not label:
-                if project.classes:
-                    label = project.classes[0].name
-                else:
-                    label = "object"
+        # Determine target classes
+        if target_classes:
+            target_names = [t.strip().lower() for t in target_classes.split(",") if t.strip()]
+            target_class_models = [c for c in project.classes if c.name.lower() in target_names]
+        else:
+            target_class_models = project.classes
 
-            db_ann = Annotation(
-                image_id=image_id,
-                box_id=det["box_id"],
-                x1=det["bbox"][0],
-                y1=det["bbox"][1],
-                x2=det["bbox"][2],
-                y2=det["bbox"][3],
-                label=label
-            )
-            db.add(db_ann)
-            new_annotations.append(db_ann)
-            
-        db_image.status = "labeled"
+        if not target_class_models:
+            # Revert in progress
+            has_annotations = db.query(Annotation).filter(Annotation.image_id == image_id).count() > 0
+            db_image.status = "labeled" if has_annotations else "unlabeled"
+            db.commit()
+            return []
+
+        # In overwrite mode: delete annotations for the target classes
+        if mode == "overwrite":
+            target_names_to_delete = [c.name for c in target_class_models]
+            db.query(Annotation).filter(
+                Annotation.image_id == image_id,
+                Annotation.label.in_(target_names_to_delete)
+            ).delete(synchronize_session=False)
+            db.commit()
+
+        # Re-index remaining annotations
+        remaining_anns = db.query(Annotation).filter(
+            Annotation.image_id == image_id
+        ).order_by(Annotation.box_id).all()
+        for idx, ann in enumerate(remaining_anns):
+            ann.box_id = idx + 1
+        box_idx = len(remaining_anns) + 1
+
+        new_annotations = []
+        
+        # If manual prompt override is provided:
+        if prompt is not None and prompt.strip():
+            # Run the single manual prompt
+            results = run_pipeline(image_path=db_image.filepath, prompt=prompt)
+            # Map detections to target classes
+            for det in results["detections"]:
+                pred_label = det["label"] if det["label"] else target_class_models[0].name
+                pred_label_lower = pred_label.lower()
+                
+                # Smart matching
+                matched_class = None
+                for c in target_class_models:
+                    c_name_lower = c.name.lower()
+                    if c_name_lower in pred_label_lower or pred_label_lower in c_name_lower:
+                        matched_class = c
+                        break
+                
+                if filter_by_classes:
+                    if not matched_class:
+                        continue
+                    label = matched_class.name
+                else:
+                    label = matched_class.name if matched_class else pred_label
+                
+                db_ann = Annotation(
+                    image_id=image_id,
+                    box_id=box_idx,
+                    x1=det["bbox"][0],
+                    y1=det["bbox"][1],
+                    x2=det["bbox"][2],
+                    y2=det["bbox"][3],
+                    label=label
+                )
+                db.add(db_ann)
+                new_annotations.append(db_ann)
+                box_idx += 1
+        else:
+            # Run prompt class-by-class
+            for target_class in target_class_models:
+                cls_prompt = target_class.prompt if target_class.prompt else f"Locate {target_class.name}."
+                results = run_pipeline(image_path=db_image.filepath, prompt=cls_prompt)
+                for det in results["detections"]:
+                    db_ann = Annotation(
+                        image_id=image_id,
+                        box_id=box_idx,
+                        x1=det["bbox"][0],
+                        y1=det["bbox"][1],
+                        x2=det["bbox"][2],
+                        y2=det["bbox"][3],
+                        label=target_class.name
+                    )
+                    db.add(db_ann)
+                    new_annotations.append(db_ann)
+                    box_idx += 1
+
+        # Commit additions
+        db.commit()
+
+        # Update image status based on whether it has annotations
+        has_annotations = db.query(Annotation).filter(Annotation.image_id == image_id).count() > 0
+        db_image.status = "labeled" if has_annotations else "unlabeled"
         db.commit()
         
         for ann in new_annotations:
@@ -369,7 +476,9 @@ def auto_label_image_file(
         return new_annotations
         
     except Exception as e:
-        db_image.status = "unlabeled"
+        # Revert status
+        has_annotations = db.query(Annotation).filter(Annotation.image_id == image_id).count() > 0
+        db_image.status = "labeled" if has_annotations else "unlabeled"
         db.commit()
         import traceback
         traceback.print_exc()
@@ -383,80 +492,160 @@ def auto_label_image_file(
 
 def process_batch_auto_label(
     project_id: int,
-    prompt: str
+    prompt: Optional[str] = None,
+    target_images: str = "unlabeled",
+    mode: str = "overwrite",
+    filter_by_classes: bool = True,
+    target_classes: Optional[List[str]] = None
 ):
-    """Background task for auto-labeling all unlabeled images in a project."""
+    """Background task for auto-labeling images in a project."""
     from app.database import SessionLocal
     db = SessionLocal()
     try:
-        images = db.query(ImageModel).filter(
-            ImageModel.project_id == project_id,
-            ImageModel.status == "unlabeled"
-        ).all()
+        if target_images == "all":
+            images = db.query(ImageModel).filter(
+                ImageModel.project_id == project_id
+            ).all()
+        else:
+            images = db.query(ImageModel).filter(
+                ImageModel.project_id == project_id,
+                ImageModel.status == "unlabeled"
+            ).all()
         
         project = db.query(Project).filter(Project.id == project_id).first()
-        fallback_label = project.classes[0].name if (project and project.classes) else "object"
-        
+        if not project:
+            return
+            
+        # Determine target classes
+        if target_classes:
+            target_names = [t.strip().lower() for t in target_classes if t.strip()]
+            target_class_models = [c for c in project.classes if c.name.lower() in target_names]
+        else:
+            target_class_models = project.classes
+
+        if not target_class_models:
+            return
+
         for db_image in images:
             db_image.status = "in_progress"
             db.commit()
             
             try:
-                results = run_pipeline(
-                    image_path=db_image.filepath,
-                    prompt=prompt
-                )
+                # In overwrite mode: delete target class annotations
+                if mode == "overwrite":
+                    target_names_to_delete = [c.name for c in target_class_models]
+                    db.query(Annotation).filter(
+                        Annotation.image_id == db_image.id,
+                        Annotation.label.in_(target_names_to_delete)
+                    ).delete(synchronize_session=False)
+                    db.commit()
+
+                # Re-index remaining annotations
+                remaining_anns = db.query(Annotation).filter(
+                    Annotation.image_id == db_image.id
+                ).order_by(Annotation.box_id).all()
+                for idx, ann in enumerate(remaining_anns):
+                    ann.box_id = idx + 1
+                box_idx = len(remaining_anns) + 1
                 
-                # Delete existing annotations
-                db.query(Annotation).filter(Annotation.image_id == db_image.id).delete()
-                
-                # Insert new annotations
-                for det in results["detections"]:
-                    label = det["label"] if det["label"] else fallback_label
-                    db_ann = Annotation(
-                        image_id=db_image.id,
-                        box_id=det["box_id"],
-                        x1=det["bbox"][0],
-                        y1=det["bbox"][1],
-                        x2=det["bbox"][2],
-                        y2=det["bbox"][3],
-                        label=label
-                    )
-                    db.add(db_ann)
-                    
-                db_image.status = "labeled"
+                # If manual override prompt is provided
+                if prompt is not None and prompt.strip():
+                    results = run_pipeline(image_path=db_image.filepath, prompt=prompt)
+                    for det in results["detections"]:
+                        pred_label = det["label"] if det["label"] else target_class_models[0].name
+                        pred_label_lower = pred_label.lower()
+                        
+                        matched_class = None
+                        for c in target_class_models:
+                            c_name_lower = c.name.lower()
+                            if c_name_lower in pred_label_lower or pred_label_lower in c_name_lower:
+                                matched_class = c
+                                break
+                        
+                        if filter_by_classes:
+                            if not matched_class:
+                                continue
+                            label = matched_class.name
+                        else:
+                            label = matched_class.name if matched_class else pred_label
+                            
+                        db_ann = Annotation(
+                            image_id=db_image.id,
+                            box_id=box_idx,
+                            x1=det["bbox"][0],
+                            y1=det["bbox"][1],
+                            x2=det["bbox"][2],
+                            y2=det["bbox"][3],
+                            label=label
+                        )
+                        db.add(db_ann)
+                        box_idx += 1
+                else:
+                    # Run class-specific prompts
+                    for target_class in target_class_models:
+                        cls_prompt = target_class.prompt if target_class.prompt else f"Locate {target_class.name}."
+                        results = run_pipeline(image_path=db_image.filepath, prompt=cls_prompt)
+                        for det in results["detections"]:
+                            db_ann = Annotation(
+                                image_id=db_image.id,
+                                box_id=box_idx,
+                                x1=det["bbox"][0],
+                                y1=det["bbox"][1],
+                                x2=det["bbox"][2],
+                                y2=det["bbox"][3],
+                                label=target_class.name
+                            )
+                            db.add(db_ann)
+                            box_idx += 1
+                            
+                db.commit()
+                # Update image status
+                has_annotations = db.query(Annotation).filter(Annotation.image_id == db_image.id).count() > 0
+                db_image.status = "labeled" if has_annotations else "unlabeled"
                 db.commit()
             except Exception as e:
-                db_image.status = "unlabeled"
+                has_annotations = db.query(Annotation).filter(Annotation.image_id == db_image.id).count() > 0
+                db_image.status = "labeled" if has_annotations else "unlabeled"
                 db.commit()
                 print(f"Error auto-labeling image {db_image.id} ({db_image.filename}): {e}")
                 
     finally:
+        try:
+            proj = db.query(Project).filter(Project.id == project_id).first()
+            if proj:
+                proj.batch_in_progress = False
+                db.commit()
+        except Exception as e:
+            print(f"Error resetting project batch flag: {e}")
         db.close()
 
 
 @app.post("/api/v1/projects/{project_id}/auto-label-all")
 def start_batch_auto_label(
     project_id: int,
+    req: BatchAutoLabelRequest,
     background_tasks: BackgroundTasks,
-    prompt: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
-    Triggers batch auto-labeling on all currently 'unlabeled' images of the project
-    in the background.
+    Triggers batch auto-labeling on images of the project in the background.
     """
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
         
-    run_prompt = prompt if prompt is not None else project.default_prompt
-    
+    project.batch_in_progress = True
+    db.commit()
+
     # Enqueue task
     background_tasks.add_task(
         process_batch_auto_label,
         project_id,
-        run_prompt
+        req.prompt,
+        req.target_images,
+        req.mode,
+        req.filter_by_classes,
+        req.target_classes
     )
     
     return {"detail": "Batch auto-labeling started in the background."}
@@ -480,7 +669,8 @@ def get_project_stats(project_id: int, db: Session = Depends(get_db)):
         "total_images": total,
         "unlabeled_images": unlabeled,
         "labeled_images": labeled,
-        "in_progress_images": in_progress
+        "in_progress_images": in_progress,
+        "batch_in_progress": project.batch_in_progress
     }
 
 

@@ -17,6 +17,7 @@ interface ClassCategory {
   project_id: number;
   name: string;
   color: string;
+  prompt?: string;
 }
 
 interface ImageItem {
@@ -49,6 +50,7 @@ interface ProjectStats {
   unlabeled_images: number;
   labeled_images: number;
   in_progress_images: number;
+  batch_in_progress: boolean;
 }
 
 export default function App() {
@@ -62,7 +64,23 @@ export default function App() {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
   const [newProjectPrompt, setNewProjectPrompt] = useState('Locate objects.');
+  const [newProjectClasses, setNewProjectClasses] = useState<{ name: string; prompt: string; color: string }[]>([
+    { name: '', prompt: '', color: '#34C759' }
+  ]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Batch Auto-Label options modal
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [batchPrompt, setBatchPrompt] = useState('');
+  const [batchTargetImages, setBatchTargetImages] = useState<'unlabeled' | 'all'>('unlabeled');
+  const [batchMode, setBatchMode] = useState<'overwrite' | 'merge'>('overwrite');
+  const [batchFilterByClasses, setBatchFilterByClasses] = useState(true);
+  const [batchTargetClasses, setBatchTargetClasses] = useState<string[]>([]);
+
+  // Editor AI Settings
+  const [editorLabelMode, setEditorLabelMode] = useState<'overwrite' | 'merge'>('overwrite');
+  const [editorFilterByClasses, setEditorFilterByClasses] = useState(true);
+  const [editorTargetClassOption, setEditorTargetClassOption] = useState<'all' | 'active'>('all');
 
   // Project Detail
   const [images, setImages] = useState<ImageItem[]>([]);
@@ -138,19 +156,59 @@ export default function App() {
 
   // Poll stats if batch labeling is active
   useEffect(() => {
-    let interval: any;
-    if (isBatchLabeling && selectedProjectId) {
-      interval = setInterval(() => {
-        fetchStats(selectedProjectId);
-        fetchProjectImages(selectedProjectId);
-        const projectStats = stats[selectedProjectId];
-        if (projectStats && projectStats.in_progress_images === 0) {
-          setIsBatchLabeling(false);
+    if (!selectedProjectId) return;
+
+    const statsData = stats[selectedProjectId];
+    const isRunning = isBatchLabeling || (statsData && statsData.batch_in_progress);
+
+    if (!isRunning) return;
+
+    let active = true;
+    let timerId: any;
+
+    const poll = async () => {
+      try {
+        const statsRes = await fetch(`${API_URL}/api/v1/projects/${selectedProjectId}/stats`);
+        if (!active) return;
+        if (statsRes.ok) {
+          const newStatsData = await statsRes.json();
+          setStats(prev => ({ ...prev, [selectedProjectId]: newStatsData }));
+          
+          if (newStatsData.batch_in_progress === false) {
+            setIsBatchLabeling(false);
+            // Fetch final image states
+            const imagesRes = await fetch(`${API_URL}/api/v1/projects/${selectedProjectId}/images`);
+            if (imagesRes.ok) {
+              const imagesData = await imagesRes.json();
+              setImages(imagesData);
+            }
+            active = false;
+            return;
+          }
         }
-      }, 3000);
-    }
-    return () => clearInterval(interval);
-  }, [isBatchLabeling, selectedProjectId, stats]);
+        
+        const imagesRes = await fetch(`${API_URL}/api/v1/projects/${selectedProjectId}/images`);
+        if (!active) return;
+        if (imagesRes.ok) {
+          const imagesData = await imagesRes.json();
+          setImages(imagesData);
+        }
+      } catch (e) {
+        console.error("Polling error:", e);
+      }
+      
+      if (active) {
+        timerId = setTimeout(poll, 2000);
+      }
+    };
+
+    timerId = setTimeout(poll, 2000);
+
+    return () => {
+      active = false;
+      clearTimeout(timerId);
+    };
+  }, [isBatchLabeling, selectedProjectId, selectedProjectId ? stats[selectedProjectId]?.batch_in_progress : undefined]);
 
   // Load project details (images, classes)
   const fetchProjectDetails = async (projectId: number) => {
@@ -165,6 +223,7 @@ export default function App() {
         setEditorPrompt(proj.default_prompt);
       }
       await fetchProjectImages(projectId);
+      await fetchStats(projectId);
     } catch (e) {
       console.error(e);
     }
@@ -189,10 +248,40 @@ export default function App() {
     }
   }, [statusFilter]);
 
+  // Sync editor prompt with class selection option
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    if (editorTargetClassOption === 'active' && activeClass) {
+      setEditorPrompt(`Locate ${activeClass.toLowerCase()}.`);
+    } else if (editorTargetClassOption === 'all') {
+      const classNames = classes.map(c => c.name.toLowerCase());
+      if (classNames.length > 0) {
+        setEditorPrompt(`Locate ${classNames.join(' and ')}.`);
+      } else {
+        const proj = projects.find(p => p.id === selectedProjectId);
+        setEditorPrompt(proj?.default_prompt || 'Locate objects.');
+      }
+    }
+  }, [editorTargetClassOption, activeClass, selectedProjectId, classes, projects]);
+
   // Create new project
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName) return;
+
+    const classesList = newProjectClasses
+      .map(cls => ({
+        name: cls.name.trim(),
+        prompt: cls.prompt.trim() || `Locate ${cls.name.trim()}.`,
+        color: cls.color
+      }))
+      .filter(cls => cls.name.length > 0);
+
+    if (classesList.length === 0) {
+      alert('Please specify at least one class category.');
+      return;
+    }
+
     try {
       const res = await fetch(`${API_URL}/api/v1/projects`, {
         method: 'POST',
@@ -201,16 +290,41 @@ export default function App() {
           name: newProjectName,
           description: newProjectDesc || null,
           default_prompt: newProjectPrompt,
+          classes: classesList,
         }),
       });
       if (res.ok) {
         setNewProjectName('');
         setNewProjectDesc('');
+        setNewProjectPrompt('Locate objects.');
+        setNewProjectClasses([{ name: '', prompt: '', color: '#34C759' }]);
         setIsCreateModalOpen(false);
         fetchProjects();
       } else {
         const error = await res.json();
         alert(`Error: ${error.detail}`);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Update a class category prompt
+  const handleUpdateClassPrompt = async (classId: number, newPrompt: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/classes/${classId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: newPrompt
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setClasses(prev => prev.map(c => c.id === classId ? updated : c));
+      } else {
+        const err = await res.json();
+        console.error('Failed to update class prompt:', err.detail);
       }
     } catch (e) {
       console.error(e);
@@ -273,17 +387,47 @@ export default function App() {
   };
 
   // Trigger batch labeling
-  const handleBatchLabel = async () => {
+  const handleBatchLabel = async (
+    prompt: string,
+    targetImages: 'unlabeled' | 'all',
+    mode: 'overwrite' | 'merge',
+    filterByClasses: boolean,
+    targetClasses: string[]
+  ) => {
     if (!selectedProjectId) return;
     setIsBatchLabeling(true);
     try {
-      await fetch(`${API_URL}/api/v1/projects/${selectedProjectId}/auto-label-all`, {
+      const res = await fetch(`${API_URL}/api/v1/projects/${selectedProjectId}/auto-label-all`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt,
+          target_images: targetImages,
+          mode,
+          filter_by_classes: filterByClasses,
+          target_classes: targetClasses,
+        }),
       });
+      if (res.ok) {
+        await fetchStats(selectedProjectId);
+      } else {
+        const error = await res.json();
+        alert(`Error starting batch auto-label: ${error.detail}`);
+        setIsBatchLabeling(false);
+      }
     } catch (e) {
       console.error(e);
       setIsBatchLabeling(false);
     }
+  };
+
+  const handleToggleBatchClass = (className: string) => {
+    const isChecked = batchTargetClasses.includes(className);
+    const nextClasses = isChecked 
+      ? batchTargetClasses.filter(c => c !== className)
+      : [...batchTargetClasses, className];
+    
+    setBatchTargetClasses(nextClasses);
   };
 
   // Export Dataset
@@ -347,6 +491,11 @@ export default function App() {
     try {
       const params = new URLSearchParams();
       if (editorPrompt) params.append('prompt', editorPrompt);
+      params.append('mode', editorLabelMode);
+      params.append('filter_by_classes', editorFilterByClasses.toString());
+      if (editorTargetClassOption === 'active' && activeClass) {
+        params.append('target_classes', activeClass);
+      }
 
       const res = await fetch(`${API_URL}/api/v1/images/${currentImageId}/auto-label?${params.toString()}`, {
         method: 'POST',
@@ -821,13 +970,102 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Default AI Detection Prompt</label>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Classes & Prompts</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const colors = ["#34C759", "#007AFF", "#FF9500", "#FF3B30", "#AF52DE", "#5AC8FA"];
+                            const nextColor = colors[newProjectClasses.length % colors.length];
+                            setNewProjectClasses(prev => [...prev, { name: '', prompt: '', color: nextColor }]);
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1 px-3 rounded-lg text-xs transition-colors flex items-center gap-1"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Add Class
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-3.5 max-h-52 overflow-y-auto pr-1">
+                        {newProjectClasses.map((cls, index) => (
+                          <div key={index} className="flex gap-2.5 items-end bg-slate-950/40 p-2.5 rounded-xl border border-slate-855">
+                            <div className="flex-shrink-0">
+                              <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Color</label>
+                              <input 
+                                type="color" 
+                                value={cls.color}
+                                onChange={(e) => {
+                                  const updated = [...newProjectClasses];
+                                  updated[index].color = e.target.value;
+                                  setNewProjectClasses(updated);
+                                }}
+                                className="w-8 h-8 rounded-lg border border-slate-800 bg-transparent cursor-pointer p-0"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Class Name</label>
+                              <input 
+                                type="text"
+                                required
+                                value={cls.name}
+                                placeholder="e.g. cat"
+                                onChange={(e) => {
+                                  const updated = [...newProjectClasses];
+                                  const oldName = updated[index].name;
+                                  const newName = e.target.value;
+                                  updated[index].name = newName;
+                                  if (!updated[index].prompt || updated[index].prompt === `Locate ${oldName}.`) {
+                                    updated[index].prompt = newName ? `Locate ${newName}.` : '';
+                                  }
+                                  setNewProjectClasses(updated);
+                                }}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                            <div className="flex-[2]">
+                              <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Locate Prompt</label>
+                              <input 
+                                type="text"
+                                value={cls.prompt}
+                                placeholder="e.g. Locate cat."
+                                onChange={(e) => {
+                                  const updated = [...newProjectClasses];
+                                  updated[index].prompt = e.target.value;
+                                  setNewProjectClasses(updated);
+                                }}
+                                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
+                            {newProjectClasses.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewProjectClasses(prev => prev.filter((_, idx) => idx !== index));
+                                }}
+                                className="bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-400 p-2 rounded-lg border border-slate-750 hover:border-red-900 transition-colors"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Default AI Detection Prompt (Fallback)</label>
                       <input 
                         type="text" 
                         value={newProjectPrompt} 
                         onChange={(e) => setNewProjectPrompt(e.target.value)}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
                       />
+                      <p className="text-[10px] text-slate-550 mt-1">
+                        💡 <strong>Hint:</strong> If you don't enter class-specific prompts, the fallback default prompt is used.
+                      </p>
                     </div>
                     <div className="flex gap-4 pt-4 mt-2">
                       <button
@@ -900,7 +1138,7 @@ export default function App() {
               </div>
 
               {/* Progress bar for background task */}
-              {stats[selectedProjectId] && (isBatchLabeling || (stats[selectedProjectId].in_progress_images > 0)) && (
+              {stats[selectedProjectId] && (isBatchLabeling || stats[selectedProjectId].batch_in_progress) && (
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-6 flex flex-col gap-2">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-semibold text-indigo-400 animate-pulse">Running Batch Auto-Labeling...</span>
@@ -1027,14 +1265,34 @@ export default function App() {
                   </button>
                 </form>
 
-                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
                   {classes.length === 0 ? (
                     <p className="text-slate-500 text-xs italic">No custom classes registered yet.</p>
                   ) : (
                     classes.map((cls) => (
-                      <div key={cls.id} className="flex items-center gap-2 bg-slate-950/60 border border-slate-850 px-3 py-2 rounded-xl text-xs font-medium">
-                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
-                        <span className="text-slate-300 font-mono truncate">{cls.name}</span>
+                      <div key={cls.id} className="bg-slate-950/60 border border-slate-850 p-2.5 rounded-xl space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
+                          <span className="text-slate-300 font-mono font-bold truncate">{cls.name}</span>
+                        </div>
+                        <div>
+                          <label className="block text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Locating Prompt</label>
+                          <input
+                            type="text"
+                            value={cls.prompt || `Locate ${cls.name}.`}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, prompt: val } : c));
+                            }}
+                            onBlur={(e) => handleUpdateClassPrompt(cls.id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors"
+                          />
+                        </div>
                       </div>
                     ))
                   )}
@@ -1044,10 +1302,14 @@ export default function App() {
               {/* Dataset wide actions */}
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
                 <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">AI Automation</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed mb-2">Run Locate Anything model on all remaining unlabeled images automatically. Dispatches in background.</p>
+                <p className="text-[11px] text-slate-400 leading-relaxed mb-2">Configure and run the Locate Anything model on the project dataset in the background.</p>
                 <button
-                  onClick={handleBatchLabel}
-                  disabled={isBatchLabeling || (stats[selectedProjectId] && stats[selectedProjectId].unlabeled_images === 0)}
+                  onClick={() => {
+                    setBatchPrompt('');
+                    setBatchTargetClasses(classes.map(c => c.name));
+                    setIsBatchModalOpen(true);
+                  }}
+                  disabled={isBatchLabeling}
                   className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1056,6 +1318,7 @@ export default function App() {
                   Auto-Label All Images
                 </button>
               </div>
+
             </div>
           </div>
         )}
@@ -1247,8 +1510,44 @@ export default function App() {
                     type="text"
                     value={editorPrompt}
                     onChange={(e) => setEditorPrompt(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 mb-2.5"
                   />
+                  <div className="flex gap-2.5">
+                    <div className="flex-1">
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mode</label>
+                      <select
+                        value={editorLabelMode}
+                        onChange={(e) => setEditorLabelMode(e.target.value as 'overwrite' | 'merge')}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-100 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="overwrite">Overwrite</option>
+                        <option value="merge">Merge</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Class</label>
+                      <select
+                        value={editorTargetClassOption}
+                        onChange={(e) => setEditorTargetClassOption(e.target.value as 'all' | 'active')}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-100 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="all">All Classes</option>
+                        <option value="active">Active ({activeClass})</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1.5">
+                    <input
+                      type="checkbox"
+                      id="editor-filter-classes"
+                      checked={editorFilterByClasses}
+                      onChange={(e) => setEditorFilterByClasses(e.target.checked)}
+                      className="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <label htmlFor="editor-filter-classes" className="text-[10px] font-semibold text-slate-400 cursor-pointer select-none">
+                      Filter Detections by Project Classes
+                    </label>
+                  </div>
                 </div>
 
                 <button
@@ -1398,6 +1697,188 @@ export default function App() {
                 )}
               </div>
             </aside>
+          </div>
+        )}
+        {/* Batch Auto-Label Settings Modal */}
+        {isBatchModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative">
+              <button
+                onClick={() => setIsBatchModalOpen(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <h3 className="text-xl font-bold mb-4">Batch Auto-Label Dataset</h3>
+              
+              <div className="space-y-4">
+                {/* Prompt input */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">AI Detection Prompt (Optional Override)</label>
+                  <input 
+                    type="text" 
+                    value={batchPrompt} 
+                    onChange={(e) => setBatchPrompt(e.target.value)}
+                    placeholder="Leave empty to use class-specific prompts (recommended)"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    💡 <strong>Default behavior:</strong> Left blank, the model runs sequentially class-by-class, using each class's own prompt. Or enter a prompt override to query all classes in one go.
+                  </p>
+                </div>
+
+                {/* Target Classes */}
+                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Target Classes</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const all = classes.map(c => c.name);
+                          setBatchTargetClasses(all);
+                        }}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-[10px] text-slate-650">|</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBatchTargetClasses([]);
+                        }}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {classes.map((cls) => {
+                      const isChecked = batchTargetClasses.includes(cls.name);
+                      return (
+                        <button
+                          key={cls.id}
+                          type="button"
+                          onClick={() => handleToggleBatchClass(cls.name)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                            isChecked
+                              ? 'bg-indigo-600/20 border-indigo-500/80 text-indigo-200 shadow-sm'
+                              : 'bg-slate-950/60 border-slate-850 text-slate-450 hover:border-slate-800'
+                          }`}
+                        >
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cls.color }} />
+                          {cls.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-550">
+                    💡 Selected classes will be auto-labeled using their respective specific prompts.
+                  </p>
+                </div>
+
+                {/* Target Images */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Target Images</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setBatchTargetImages('unlabeled')}
+                      className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                        batchTargetImages === 'unlabeled'
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200'
+                          : 'bg-slate-950 border-slate-850 text-slate-450 hover:border-slate-800'
+                      }`}
+                    >
+                      Unlabeled images only
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchTargetImages('all')}
+                      className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                        batchTargetImages === 'all'
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200'
+                          : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800'
+                      }`}
+                    >
+                      All images in dataset
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mode (Merge vs Overwrite) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Labeling Mode</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setBatchMode('overwrite')}
+                      className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                        batchMode === 'overwrite'
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200'
+                          : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800'
+                      }`}
+                    >
+                      Overwrite existing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchMode('merge')}
+                      className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                        batchMode === 'merge'
+                          ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200'
+                          : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800'
+                      }`}
+                    >
+                      Merge / Incremental
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-550 mt-1">
+                    {batchMode === 'overwrite'
+                      ? 'Overwrite deletes existing boxes of the selected target classes. Other classes remain intact.'
+                      : 'Merge appends new predictions without deleting any existing boxes.'}
+                  </p>
+                </div>
+
+                {/* Filter by project classes */}
+                <div className="flex items-center gap-3 bg-slate-950/60 border border-slate-850/60 p-3 rounded-xl">
+                  <input
+                    type="checkbox"
+                    id="batch-filter-classes"
+                    checked={batchFilterByClasses}
+                    onChange={(e) => setBatchFilterByClasses(e.target.checked)}
+                    className="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                  />
+                  <label htmlFor="batch-filter-classes" className="text-xs font-medium text-slate-350 cursor-pointer select-none">
+                    Filter detections by project classes
+                  </label>
+                </div>
+
+                <div className="flex gap-4 pt-4 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchModalOpen(false)}
+                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-330 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleBatchLabel(batchPrompt, batchTargetImages, batchMode, batchFilterByClasses, batchTargetClasses);
+                      setIsBatchModalOpen(false);
+                    }}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-indigo-500/10 transition-colors"
+                  >
+                    Run Auto-Labeling
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>

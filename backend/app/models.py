@@ -21,12 +21,19 @@ class LabelResponse(BaseModel):
 class ClassCreate(BaseModel):
     name: str
     color: Optional[str] = "#34C759"  # Hex color code for annotations
+    prompt: Optional[str] = None
+
+class ClassUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    prompt: Optional[str] = None
 
 class ClassResponse(BaseModel):
     id: int
     project_id: int
     name: str
     color: str
+    prompt: Optional[str] = None
     created_at: datetime.datetime
 
     class Config:
@@ -39,12 +46,19 @@ class ProjectBase(BaseModel):
     default_prompt: Optional[str] = "Locate objects."
 
 class ProjectCreate(ProjectBase):
-    pass
+    classes: Optional[List[ClassCreate]] = []
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     default_prompt: Optional[str] = None
+
+class BatchAutoLabelRequest(BaseModel):
+    prompt: Optional[str] = None
+    target_images: str = "unlabeled"  # "unlabeled" or "all"
+    mode: str = "overwrite"           # "overwrite" or "merge"
+    filter_by_classes: bool = True
+    target_classes: Optional[List[str]] = None
 
 class ProjectResponse(ProjectBase):
     id: int
