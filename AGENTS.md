@@ -63,6 +63,16 @@ uv run main.py
 ```
 *Note: LocateAnything-3B-4bit runs locally on Apple Silicon via MLX.*
 
+### mlx-vlm Dependency
+LocateAnything support is **not yet in a released `mlx-vlm`**. The project depends on a
+fork with the `locateanything` model implementation:
+```toml
+# backend/pyproject.toml
+mlx-vlm = { git = "https://github.com/beshkenadze/mlx-vlm", branch = "feat/locateanything-3b" }
+```
+The backend will fail to load the model without this fork. Do **not** override it with the
+stock `mlx-vlm` from PyPI.
+
 ### 2. Frontend (React + Vite)
 ```bash
 cd frontend

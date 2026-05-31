@@ -156,7 +156,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.136.3" },
     { name = "huggingface-hub", specifier = ">=1.17.0" },
-    { name = "mlx-vlm", specifier = ">=0.5.0" },
+    { name = "mlx-vlm", git = "https://github.com/beshkenadze/mlx-vlm?rev=feat%2Flocateanything-3b" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "python-multipart", specifier = ">=0.0.30" },
     { name = "sqlalchemy", specifier = ">=2.0.50" },
@@ -789,7 +789,7 @@ wheels = [
 [[package]]
 name = "mlx-vlm"
 version = "0.5.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/beshkenadze/mlx-vlm?rev=feat%2Flocateanything-3b#04591ef6d625cb504d2d52fccf8965a6e75e7d8a" }
 dependencies = [
     { name = "datasets" },
     { name = "fastapi" },
@@ -805,10 +805,6 @@ dependencies = [
     { name = "tqdm" },
     { name = "transformers" },
     { name = "uvicorn" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/80/a3/70dce014f6a72efd2cecc07b6a68fc11c0694fbe54ea553b2e00499c7b36/mlx_vlm-0.5.0.tar.gz", hash = "sha256:24563cd1b3a399fd941b2359100628306e2754db1b48780516d1283138258793", size = 1033154, upload-time = "2026-05-06T21:09:33.594Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/66/fb955ccc442aa556e5e9d8836fb9041a7aadff5a88fa80c285e53dc19bf5/mlx_vlm-0.5.0-py3-none-any.whl", hash = "sha256:3351d6ccf609cbf57a4c8cd8308e9a1ce469883d8679d9968c6c6f77af016419", size = 1218132, upload-time = "2026-05-06T21:09:32.071Z" },
 ]
 
 [[package]]

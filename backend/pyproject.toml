@@ -13,3 +13,6 @@ dependencies = [
     "sqlalchemy>=2.0.50",
     "uvicorn>=0.48.0",
 ]
+
+[tool.uv.sources]
+mlx-vlm = { git = "https://github.com/beshkenadze/mlx-vlm", rev = "feat/locateanything-3b" }
