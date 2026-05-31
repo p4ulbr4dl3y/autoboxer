@@ -614,6 +614,17 @@ export default function App() {
     );
   };
 
+  // Save before navigating using header
+  const handleHeaderNavigate = async (targetView: 'dashboard' | 'project') => {
+    if (view === 'editor') {
+      await handleSaveAnnotations();
+    }
+    if (targetView === 'dashboard') {
+      setSelectedProjectId(null);
+    }
+    setView(targetView);
+  };
+
   // Keyboard navigation / deletions
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -628,6 +639,15 @@ export default function App() {
         handleNextImage();
       } else if (e.key === 'ArrowLeft') {
         handlePrevImage();
+      } else if (e.key === 'Enter') {
+        if (currentImageIndex < images.length - 1) {
+          handleNextImage();
+        } else {
+          (async () => {
+            const saved = await handleSaveAnnotations();
+            if (saved) setView('project');
+          })();
+        }
       } else if (e.key === 'd' || e.key === 'в') {
         setCanvasMode('draw');
       } else if (e.key === 's' || e.key === 'ы') {
@@ -636,7 +656,19 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedAnnId, annotations, currentImageId, view]);
+  }, [
+    selectedAnnId,
+    annotations,
+    currentImageId,
+    view,
+    currentImageIndex,
+    images,
+    handleDeleteAnnotation,
+    handleNextImage,
+    handlePrevImage,
+    handleSaveAnnotations,
+    setView
+  ]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -655,14 +687,14 @@ export default function App() {
         </div>
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => { setView('dashboard'); setSelectedProjectId(null); }}
+            onClick={() => handleHeaderNavigate('dashboard')}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${view === 'dashboard' ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-400 hover:text-white'}`}
           >
             Dashboard
           </button>
           {selectedProjectId && (
             <button 
-              onClick={() => { setView('project'); }}
+              onClick={() => handleHeaderNavigate('project')}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${view === 'project' ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-400 hover:text-white'}`}
             >
               Gallery
@@ -1241,6 +1273,33 @@ export default function App() {
                     </>
                   )}
                 </button>
+              </div>
+
+              {/* Active Draw Class Selection */}
+              <div className="p-5 border-b border-slate-850 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Drawing Class</h3>
+                <div className="flex flex-wrap gap-2">
+                  {classes.map((cls) => {
+                    const isActive = activeClass === cls.name;
+                    return (
+                      <button
+                        key={cls.id}
+                        onClick={() => setActiveClass(cls.name)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border ${
+                          isActive
+                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                        }`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
+                        {cls.name}
+                      </button>
+                    );
+                  })}
+                  {classes.length === 0 && (
+                    <p className="text-slate-500 text-xs italic">No project classes defined.</p>
+                  )}
+                </div>
               </div>
 
               {/* Bounding box list */}
