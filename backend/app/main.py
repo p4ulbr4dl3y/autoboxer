@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Locate Anything Auto-Labeling API",
     description="API for automatic bounding box detection, dataset/project management, and annotation storage.",
-    version="2.0.0",
+    version="3.0.0",
     lifespan=lifespan
 )
 
@@ -90,9 +90,7 @@ def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     new_project = Project(
         name=project.name,
         description=project.description,
-        default_prompt=project.default_prompt,
-        default_method=project.default_method,
-        default_threshold=project.default_threshold
+        default_prompt=project.default_prompt
     )
     db.add(new_project)
     db.commit()
@@ -258,7 +256,7 @@ def get_image_file(image_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/v1/images/{image_id}/annotations", response_model=List[AnnotationResponse])
 def get_image_annotations(image_id: int, db: Session = Depends(get_db)):
-    """Retrieve saved bounding boxes, polygons, and classes for an image."""
+    """Retrieve saved bounding boxes and classes for an image."""
     db_image = db.query(ImageModel).filter(ImageModel.id == image_id).first()
     if not db_image:
         raise HTTPException(status_code=404, detail="Image not found")
@@ -293,10 +291,7 @@ def update_image_annotations(
             y1=ann.y1,
             x2=ann.x2,
             y2=ann.y2,
-            polygon=ann.polygon,
-            label=ann.label,
-            score=ann.score,
-            top5=[t.model_dump() for t in ann.top5] if ann.top5 else None
+            label=ann.label
         )
         db.add(db_ann)
         new_annotations.append(db_ann)
@@ -314,9 +309,6 @@ def update_image_annotations(
 def auto_label_image_file(
     image_id: int,
     prompt: Optional[str] = None,
-    method: Optional[str] = None,
-    threshold: Optional[float] = None,
-    classify: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -329,18 +321,7 @@ def auto_label_image_file(
         raise HTTPException(status_code=404, detail="Image not found")
         
     project = db_image.project
-    
-    # Fallback to project defaults if parameters are not provided
     run_prompt = prompt if prompt is not None else project.default_prompt
-    run_method = method if method is not None else project.default_method
-    run_threshold = threshold if threshold is not None else project.default_threshold
-    run_classify = classify if classify is not None else True
-    
-    if run_method not in ("sam", "birefnet", "none"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid segmentation method '{run_method}'. Allowed values: 'sam', 'birefnet', 'none'"
-        )
 
     if not os.path.exists(db_image.filepath):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
@@ -351,10 +332,7 @@ def auto_label_image_file(
     try:
         results = run_pipeline(
             image_path=db_image.filepath,
-            prompt=run_prompt,
-            method=run_method,
-            threshold=run_threshold,
-            classify=run_classify
+            prompt=run_prompt
         )
         
         # Clear existing annotations
@@ -362,19 +340,14 @@ def auto_label_image_file(
         
         new_annotations = []
         for det in results["detections"]:
-            # Extract polygon from response structure
-            polygon_pts = None
-            if det.get("segmentation") and det["segmentation"].get("polygon"):
-                polygon_pts = det["segmentation"]["polygon"]
-                
-            label = None
-            score = None
-            top5 = None
-            if det.get("classification"):
-                label = det["classification"]["label"]
-                score = det["classification"]["score"]
-                top5 = det["classification"]["top5"]
-                
+            # If model didn't return a tag inside <ref>, we fallback to the first project category, or 'object'
+            label = det["label"]
+            if not label:
+                if project.classes:
+                    label = project.classes[0].name
+                else:
+                    label = "object"
+
             db_ann = Annotation(
                 image_id=image_id,
                 box_id=det["box_id"],
@@ -382,10 +355,7 @@ def auto_label_image_file(
                 y1=det["bbox"][1],
                 x2=det["bbox"][2],
                 y2=det["bbox"][3],
-                polygon=polygon_pts,
-                label=label,
-                score=score,
-                top5=top5
+                label=label
             )
             db.add(db_ann)
             new_annotations.append(db_ann)
@@ -409,15 +379,11 @@ def auto_label_image_file(
         )
 
 
-
 # --- Background Batch Labeling & Export Endpoints ---
 
 def process_batch_auto_label(
     project_id: int,
-    prompt: str,
-    method: str,
-    threshold: float,
-    classify: bool
+    prompt: str
 ):
     """Background task for auto-labeling all unlabeled images in a project."""
     from app.database import SessionLocal
@@ -428,6 +394,9 @@ def process_batch_auto_label(
             ImageModel.status == "unlabeled"
         ).all()
         
+        project = db.query(Project).filter(Project.id == project_id).first()
+        fallback_label = project.classes[0].name if (project and project.classes) else "object"
+        
         for db_image in images:
             db_image.status = "in_progress"
             db.commit()
@@ -435,10 +404,7 @@ def process_batch_auto_label(
             try:
                 results = run_pipeline(
                     image_path=db_image.filepath,
-                    prompt=prompt,
-                    method=method,
-                    threshold=threshold,
-                    classify=classify
+                    prompt=prompt
                 )
                 
                 # Delete existing annotations
@@ -446,18 +412,7 @@ def process_batch_auto_label(
                 
                 # Insert new annotations
                 for det in results["detections"]:
-                    polygon_pts = None
-                    if det.get("segmentation") and det["segmentation"].get("polygon"):
-                        polygon_pts = det["segmentation"]["polygon"]
-                        
-                    label = None
-                    score = None
-                    top5 = None
-                    if det.get("classification"):
-                        label = det["classification"]["label"]
-                        score = det["classification"]["score"]
-                        top5 = det["classification"]["top5"]
-                        
+                    label = det["label"] if det["label"] else fallback_label
                     db_ann = Annotation(
                         image_id=db_image.id,
                         box_id=det["box_id"],
@@ -465,10 +420,7 @@ def process_batch_auto_label(
                         y1=det["bbox"][1],
                         x2=det["bbox"][2],
                         y2=det["bbox"][3],
-                        polygon=polygon_pts,
-                        label=label,
-                        score=score,
-                        top5=top5
+                        label=label
                     )
                     db.add(db_ann)
                     
@@ -488,9 +440,6 @@ def start_batch_auto_label(
     project_id: int,
     background_tasks: BackgroundTasks,
     prompt: Optional[str] = None,
-    method: Optional[str] = None,
-    threshold: Optional[float] = None,
-    classify: Optional[bool] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -502,18 +451,12 @@ def start_batch_auto_label(
         raise HTTPException(status_code=404, detail="Project not found")
         
     run_prompt = prompt if prompt is not None else project.default_prompt
-    run_method = method if method is not None else project.default_method
-    run_threshold = threshold if threshold is not None else project.default_threshold
-    run_classify = classify if classify is not None else True
     
     # Enqueue task
     background_tasks.add_task(
         process_batch_auto_label,
         project_id,
-        run_prompt,
-        run_method,
-        run_threshold,
-        run_classify
+        run_prompt
     )
     
     return {"detail": "Batch auto-labeling started in the background."}
@@ -567,7 +510,7 @@ def export_project_annotations(
     if not images:
         raise HTTPException(status_code=400, detail="No labeled images to export in this project")
 
-    # Determine unique classes across project (custom ones + actually annotated ones)
+    # Determine unique classes across project
     custom_classes = [c.name for c in project.classes]
     annotated_classes = db.query(Annotation.label).join(ImageModel).filter(
         ImageModel.project_id == project_id,
@@ -585,21 +528,17 @@ def export_project_annotations(
     
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         if format == "yolo":
-            # 1. Write dataset.yaml
             yaml_lines = ["names:"]
             for name, idx in class_to_id.items():
                 yaml_lines.append(f"  {idx}: {name}")
             zip_file.writestr("dataset.yaml", "\n".join(yaml_lines) + "\n")
             
-            # 2. Write images and labels
             for db_image in images:
                 if not os.path.exists(db_image.filepath):
                     continue
                     
-                # Add image
                 zip_file.write(db_image.filepath, f"images/{db_image.filename}")
                 
-                # Fetch dimensions
                 w_img = db_image.width
                 h_img = db_image.height
                 if not w_img or not h_img:
@@ -609,7 +548,6 @@ def export_project_annotations(
                     except Exception:
                         continue
                 
-                # Generate label file contents
                 label_lines = []
                 for ann in db_image.annotations:
                     c_id = class_to_id.get(ann.label, 0)
@@ -677,13 +615,6 @@ def export_project_annotations(
                         "area": area,
                         "iscrowd": 0
                     }
-                    
-                    if ann.polygon:
-                        flat_polygon = []
-                        for pt in ann.polygon:
-                            flat_polygon.extend(pt)
-                        coco_ann["segmentation"] = [flat_polygon]
-                        
                     coco_data["annotations"].append(coco_ann)
                     ann_counter += 1
             
@@ -705,21 +636,12 @@ def export_project_annotations(
 @app.post("/api/v1/label", response_model=LabelResponse)
 async def label_image(
     file: UploadFile = File(...),
-    prompt: str = Form("Locate full-body LEGO minifigure characters."),
-    method: str = Form("sam"),
-    threshold: float = Form(0.3),
-    classify: bool = Form(True)
+    prompt: str = Form("Locate objects.")
 ):
     """
     Direct model execution on an uploaded image file.
-    Returns structured JSON bounding boxes and classifications.
+    Returns structured JSON bounding boxes.
     """
-    if method not in ("sam", "birefnet", "none"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid segmentation method '{method}'. Allowed values: 'sam', 'birefnet', 'none'"
-        )
-
     suffix = os.path.splitext(file.filename)[1] if file.filename else ".png"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         try:
@@ -734,10 +656,7 @@ async def label_image(
     try:
         results = run_pipeline(
             image_path=tmp_path,
-            prompt=prompt,
-            method=method,
-            threshold=threshold,
-            classify=classify
+            prompt=prompt
         )
         return results
     except Exception as e:
@@ -755,21 +674,12 @@ async def label_image(
 @app.post("/api/v1/label-visualize")
 async def label_image_visualize(
     file: UploadFile = File(...),
-    prompt: str = Form("Locate full-body LEGO minifigure characters."),
-    method: str = Form("sam"),
-    threshold: float = Form(0.3),
-    classify: bool = Form(True)
+    prompt: str = Form("Locate objects.")
 ):
     """
     Direct model execution on an uploaded image file.
     Returns the annotated image file directly as JPEG.
     """
-    if method not in ("sam", "birefnet", "none"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid segmentation method '{method}'. Allowed values: 'sam', 'birefnet', 'none'"
-        )
-
     suffix = os.path.splitext(file.filename)[1] if file.filename else ".png"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
         try:
@@ -784,10 +694,7 @@ async def label_image_visualize(
     try:
         results = run_pipeline(
             image_path=tmp_path,
-            prompt=prompt,
-            method=method,
-            threshold=threshold,
-            classify=classify
+            prompt=prompt
         )
         
         annotated_image = visualize_predictions(tmp_path, results["detections"])

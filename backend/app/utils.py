@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 
 def visualize_predictions(image_path: str, detections: List[Dict[str, Any]]) -> Image.Image:
     """
-    Open an image and draw bounding boxes, labels, and segmentation masks.
+    Open an image and draw bounding boxes and labels.
     Returns a composite PIL Image in RGB format.
     """
     image = Image.open(image_path).convert("RGBA")
@@ -30,31 +30,13 @@ def visualize_predictions(image_path: str, detections: List[Dict[str, Any]]) -> 
         color = colors[i % len(colors)]
         x1, y1, x2, y2 = det["bbox"]
         
-        # 1. Draw polygon mask overlay if present
-        if det.get("segmentation") and det["segmentation"].get("polygon"):
-            poly = det["segmentation"]["polygon"]
-            if len(poly) >= 3:
-                overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
-                draw_ol = ImageDraw.Draw(overlay)
-                poly_tuples = [tuple(p) for p in poly]
-                
-                # Semi-transparent fill and solid boundary outline
-                fill_color = (color[0], color[1], color[2], 70)
-                draw_ol.polygon(poly_tuples, fill=fill_color, outline=color)
-                
-                # Composite overlay back onto the main image
-                image = Image.alpha_composite(image, overlay)
-                draw = ImageDraw.Draw(image)  # Reinitialize drawing context on new image
-                
-        # 2. Draw Bounding Box
+        # 1. Draw Bounding Box
         draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
         
-        # 3. Label Text
+        # 2. Label Text
         label_text = f"#{det['box_id']}"
-        if det.get("classification") and det["classification"].get("label"):
-            label = det["classification"]["label"]
-            score = det["classification"]["score"]
-            label_text = f"{label} ({score:.2f})"
+        if det.get("label"):
+            label_text = f"{det['label']}"
             
         # Draw background for text label
         try:

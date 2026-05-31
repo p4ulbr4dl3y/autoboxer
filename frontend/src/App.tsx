@@ -8,8 +8,6 @@ interface Project {
   name: string;
   description: string | null;
   default_prompt: string;
-  default_method: string;
-  default_threshold: number;
   created_at: string;
   classes: ClassCategory[];
 }
@@ -32,11 +30,6 @@ interface ImageItem {
   created_at: string;
 }
 
-interface Top5Candidate {
-  label: string;
-  score: number;
-}
-
 interface Annotation {
   id: number | string; // string for temp frontend IDs
   image_id: number;
@@ -45,10 +38,7 @@ interface Annotation {
   y1: number;
   x2: number;
   y2: number;
-  polygon: number[][] | null; // [[x, y], ...]
   label: string | null;
-  score: number | null;
-  top5: Top5Candidate[] | null;
   color?: string; // transient color mapped from class
 }
 
@@ -71,9 +61,7 @@ export default function App() {
   const [stats, setStats] = useState<Record<number, ProjectStats>>({});
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
-  const [newProjectPrompt, setNewProjectPrompt] = useState('Locate full-body LEGO minifigure characters.');
-  const [newProjectMethod, setNewProjectMethod] = useState('sam');
-  const [newProjectThreshold, setNewProjectThreshold] = useState(0.3);
+  const [newProjectPrompt, setNewProjectPrompt] = useState('Locate objects.');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Project Detail
@@ -93,8 +81,6 @@ export default function App() {
   
   // Editor AI Overrides
   const [editorPrompt, setEditorPrompt] = useState('');
-  const [editorMethod, setEditorMethod] = useState('sam');
-  const [editorThreshold, setEditorThreshold] = useState(0.3);
   const [isAiRunning, setIsAiRunning] = useState(false);
   
   // Active Canvas Modes
@@ -126,7 +112,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setProjects(data);
-        // Load stats for each project
         data.forEach((p: Project) => fetchStats(p.id));
       }
     } catch (e) {
@@ -158,7 +143,6 @@ export default function App() {
       interval = setInterval(() => {
         fetchStats(selectedProjectId);
         fetchProjectImages(selectedProjectId);
-        // Check if finished
         const projectStats = stats[selectedProjectId];
         if (projectStats && projectStats.in_progress_images === 0) {
           setIsBatchLabeling(false);
@@ -179,8 +163,6 @@ export default function App() {
           setActiveClass(proj.classes[0].name);
         }
         setEditorPrompt(proj.default_prompt);
-        setEditorMethod(proj.default_method);
-        setEditorThreshold(proj.default_threshold);
       }
       await fetchProjectImages(projectId);
     } catch (e) {
@@ -219,8 +201,6 @@ export default function App() {
           name: newProjectName,
           description: newProjectDesc || null,
           default_prompt: newProjectPrompt,
-          default_method: newProjectMethod,
-          default_threshold: newProjectThreshold,
         }),
       });
       if (res.ok) {
@@ -279,7 +259,6 @@ export default function App() {
       });
       if (res.ok) {
         setUploadFiles(null);
-        // Clear input element
         const fileInput = document.getElementById('file-upload-input') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
         
@@ -339,7 +318,6 @@ export default function App() {
       const res = await fetch(`${API_URL}/api/v1/images/${imageId}/annotations`);
       if (res.ok) {
         const data = await res.json();
-        // Decorate with class colors
         const mapped = data.map((ann: Annotation) => {
           const cls = classes.find(c => c.name === ann.label);
           return { ...ann, color: cls ? cls.color : '#34C759' };
@@ -369,9 +347,6 @@ export default function App() {
     try {
       const params = new URLSearchParams();
       if (editorPrompt) params.append('prompt', editorPrompt);
-      params.append('method', editorMethod);
-      params.append('threshold', editorThreshold.toString());
-      params.append('classify', 'true');
 
       const res = await fetch(`${API_URL}/api/v1/images/${currentImageId}/auto-label?${params.toString()}`, {
         method: 'POST',
@@ -386,7 +361,6 @@ export default function App() {
         if (mapped.length > 0) {
           setSelectedAnnId(mapped[0].id);
         }
-        // Update local image status
         setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: 'labeled' } : img));
       }
     } catch (e) {
@@ -400,17 +374,13 @@ export default function App() {
   const handleSaveAnnotations = async () => {
     if (!currentImageId) return;
     try {
-      // Strip frontend color and check ID format
       const cleaned = annotations.map((ann, index) => ({
         box_id: index + 1,
         x1: Math.round(ann.x1),
         y1: Math.round(ann.y1),
         x2: Math.round(ann.x2),
         y2: Math.round(ann.y2),
-        polygon: ann.polygon,
         label: ann.label,
-        score: ann.score || 1.0,
-        top5: ann.top5,
       }));
 
       const res = await fetch(`${API_URL}/api/v1/images/${currentImageId}/annotations`, {
@@ -420,7 +390,6 @@ export default function App() {
       });
 
       if (res.ok) {
-        // Update image status list
         setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: 'labeled' } : img));
         if (selectedProjectId) fetchStats(selectedProjectId);
         return true;
@@ -481,13 +450,10 @@ export default function App() {
       setDrawStart(coords);
       setDrawEnd(coords);
     } else if (canvasMode === 'select') {
-      // Check if we clicked on resize handle of selected box
-      // Let's implement dragging soon, for now select box:
       const clickedAnn = findAnnotationAtCoords(coords.x, coords.y);
       if (clickedAnn) {
         setSelectedAnnId(clickedAnn.id);
         
-        // Setup dragging
         setIsDragging(true);
         setDraggedAnnId(clickedAnn.id);
         setDragStart(coords);
@@ -516,7 +482,6 @@ export default function App() {
       const origW = currentImage.width || 1;
       const origH = currentImage.height || 1;
       
-      // Convert drag deltas back to original pixel coordinates
       const deltaOrigX = (deltaX / renderedWidth) * origW;
       const deltaOrigY = (deltaY / renderedHeight) * origH;
       
@@ -534,7 +499,6 @@ export default function App() {
               newY1 += deltaOrigY;
               newY2 += deltaOrigY;
               
-              // Prevent moving out of bounds
               if (newX1 < 0) {
                 newX2 -= newX1;
                 newX1 = 0;
@@ -577,7 +541,6 @@ export default function App() {
       const origW = currentImage.width || 1;
       const origH = currentImage.height || 1;
 
-      // Calculate coordinates relative to original size
       const x1 = Math.min(drawStart.x, drawEnd.x);
       const y1 = Math.min(drawStart.y, drawEnd.y);
       const x2 = Math.max(drawStart.x, drawEnd.x);
@@ -588,7 +551,6 @@ export default function App() {
       const origX2 = (x2 / renderedWidth) * origW;
       const origY2 = (y2 / renderedHeight) * origH;
 
-      // Bounding box must be of some minimum size to avoid tiny noise clicks
       if (origX2 - origX1 > 10 && origY2 - origY1 > 10) {
         const cls = classes.find(c => c.name === activeClass);
         const tempId = `temp_${Date.now()}`;
@@ -600,10 +562,7 @@ export default function App() {
           y1: Math.round(origY1),
           x2: Math.round(origX2),
           y2: Math.round(origY2),
-          polygon: null,
           label: activeClass || 'object',
-          score: 1.0,
-          top5: null,
           color: cls ? cls.color : '#34C759',
         };
         setAnnotations(prev => [...prev, newAnn]);
@@ -622,11 +581,9 @@ export default function App() {
     const origW = currentImage.width || 1;
     const origH = currentImage.height || 1;
     
-    // Convert click coordinates to original scale
     const origX = (x / renderedWidth) * origW;
     const origY = (y / renderedHeight) * origH;
 
-    // Search from top layer to bottom layer (reverse list)
     for (let i = annotations.length - 1; i >= 0; i--) {
       const ann = annotations[i];
       if (origX >= ann.x1 && origX <= ann.x2 && origY >= ann.y1 && origY <= ann.y2) {
@@ -817,7 +774,7 @@ export default function App() {
                         required 
                         value={newProjectName} 
                         onChange={(e) => setNewProjectName(e.target.value)}
-                        placeholder="e.g. LEGO Minifigures"
+                        placeholder="e.g. Traffic Sign Detection"
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
                       />
                     </div>
@@ -831,54 +788,20 @@ export default function App() {
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
                       />
                     </div>
-                    <div className="border-t border-slate-800 pt-4 mt-2">
-                      <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">AI Model Default Settings</h4>
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-400 mb-1">Detection Text Prompt</label>
-                          <input 
-                            type="text" 
-                            value={newProjectPrompt} 
-                            onChange={(e) => setNewProjectPrompt(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-400 mb-1">Segmentation</label>
-                            <select 
-                              value={newProjectMethod} 
-                              onChange={(e) => setNewProjectMethod(e.target.value)}
-                              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
-                            >
-                              <option value="sam">SAM3 (Accurate)</option>
-                              <option value="birefnet">BiRefNet (Background)</option>
-                              <option value="none">None (Bbox only)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-400 mb-1">Confidence Threshold</label>
-                            <div className="flex items-center gap-2">
-                              <input 
-                                type="range" 
-                                min="0.05" 
-                                max="0.95" 
-                                step="0.05"
-                                value={newProjectThreshold} 
-                                onChange={(e) => setNewProjectThreshold(parseFloat(e.target.value))}
-                                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                              />
-                              <span className="text-xs font-mono text-slate-400 w-8 text-right">{newProjectThreshold}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Default AI Detection Prompt</label>
+                      <input 
+                        type="text" 
+                        value={newProjectPrompt} 
+                        onChange={(e) => setNewProjectPrompt(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors"
+                      />
                     </div>
                     <div className="flex gap-4 pt-4 mt-2">
                       <button
                         type="button"
                         onClick={() => setIsCreateModalOpen(false)}
-                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-330 font-semibold py-2.5 rounded-xl text-sm transition-colors"
                       >
                         Cancel
                       </button>
@@ -980,7 +903,7 @@ export default function App() {
                       <div 
                         key={img.id}
                         onClick={() => { setCurrentImageId(img.id); setView('editor'); }}
-                        className="bg-slate-950/80 border border-slate-850 rounded-xl overflow-hidden hover:border-slate-700 group cursor-pointer relative transition-all duration-200"
+                        className="bg-slate-950/80 border border-slate-855 rounded-xl overflow-hidden hover:border-slate-700 group cursor-pointer relative transition-all duration-200"
                       >
                         <div className="aspect-video w-full bg-slate-900 flex items-center justify-center overflow-hidden">
                           <img 
@@ -1124,7 +1047,7 @@ export default function App() {
                     className={`p-1.5 rounded-lg border cursor-pointer hover:border-slate-700 transition-all ${
                       img.id === currentImageId 
                         ? 'border-indigo-500 bg-indigo-500/10' 
-                        : 'border-slate-850 bg-slate-900/30'
+                        : 'border-slate-855 bg-slate-900/30'
                     }`}
                   >
                     <div className="aspect-video w-full rounded overflow-hidden bg-slate-950">
@@ -1172,7 +1095,7 @@ export default function App() {
                 <button 
                   onClick={handlePrevImage} 
                   disabled={currentImageIndex === 0}
-                  className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-850 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl"
+                  className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-855 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1184,7 +1107,7 @@ export default function App() {
                 <button 
                   onClick={handleNextImage} 
                   disabled={currentImageIndex === images.length - 1}
-                  className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-850 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl"
+                  className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-855 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl"
                 >
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1198,7 +1121,7 @@ export default function App() {
                 onMouseDown={handleCanvasMouseDown}
                 onMouseMove={handleCanvasMouseMove}
                 onMouseUp={handleCanvasMouseUp}
-                className="max-h-[80%] max-w-[85%] relative border border-slate-800 shadow-2xl select-none"
+                className="max-h-[85%] max-w-[85%] relative border border-slate-800 shadow-2xl select-none"
               >
                 <img
                   ref={imageRef}
@@ -1208,31 +1131,6 @@ export default function App() {
                   className="max-h-full max-w-full block pointer-events-none"
                 />
 
-                {/* SVG segmentation masks layer */}
-                {renderedWidth > 0 && renderedHeight > 0 && (
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-                    {annotations.map((ann) => {
-                      if (!ann.polygon || !currentImage) return null;
-                      const origW = currentImage.width || 1;
-                      const origH = currentImage.height || 1;
-                      
-                      const pointsStr = ann.polygon
-                        .map(pt => `${(pt[0] / origW) * renderedWidth},${(pt[1] / origH) * renderedHeight}`)
-                        .join(' ');
-                      
-                      return (
-                        <polygon
-                          key={ann.id}
-                          points={pointsStr}
-                          fill={`${ann.color || '#34C759'}30`}
-                          stroke={ann.color || '#34C759'}
-                          strokeWidth="2"
-                        />
-                      );
-                    })}
-                  </svg>
-                )}
-
                 {/* DOM HTML bounding boxes overlays layer */}
                 {renderedWidth > 0 && renderedHeight > 0 && currentImage && (
                   <div className="absolute inset-0 w-full h-full pointer-events-auto z-20 overflow-hidden">
@@ -1240,7 +1138,6 @@ export default function App() {
                       const origW = currentImage.width || 1;
                       const origH = currentImage.height || 1;
 
-                      // Map coordinates to DOM pixels
                       const left = (ann.x1 / origW) * renderedWidth;
                       const top = (ann.y1 / origH) * renderedHeight;
                       const width = ((ann.x2 - ann.x1) / origW) * renderedWidth;
@@ -1268,7 +1165,7 @@ export default function App() {
                             style={{ backgroundColor: boxColor }}
                             className="absolute -top-6 left-[-2px] text-[10px] text-white px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shadow select-none"
                           >
-                            {ann.label} {ann.score ? `(${ann.score.toFixed(2)})` : ''}
+                            {ann.label}
                           </div>
 
                           {/* Resize handle (bottom right) */}
@@ -1322,40 +1219,10 @@ export default function App() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Method</label>
-                    <select
-                      value={editorMethod}
-                      onChange={(e) => setEditorMethod(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-100 focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="sam">SAM3</option>
-                      <option value="birefnet">BiRefNet</option>
-                      <option value="none">None</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Threshold</label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="range"
-                        min="0.1"
-                        max="0.9"
-                        step="0.05"
-                        value={editorThreshold}
-                        onChange={(e) => setEditorThreshold(parseFloat(e.target.value))}
-                        className="w-full h-1 bg-slate-850 appearance-none rounded cursor-pointer accent-indigo-500"
-                      />
-                      <span className="text-[10px] font-mono text-slate-400">{editorThreshold}</span>
-                    </div>
-                  </div>
-                </div>
-
                 <button
                   onClick={handleAutoLabelCurrent}
                   disabled={isAiRunning}
-                  className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/10 active:scale-95 transition-all"
+                  className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/10 active:scale-95 transition-all"
                 >
                   {isAiRunning ? (
                     <>
@@ -1395,7 +1262,7 @@ export default function App() {
                           className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
                             isSelected 
                               ? 'border-indigo-500 bg-indigo-500/10' 
-                              : 'border-slate-850 bg-slate-950/20 hover:border-slate-800'
+                              : 'border-slate-855 bg-slate-955/20 hover:border-slate-800'
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -1430,11 +1297,8 @@ export default function App() {
                             </button>
                           </div>
                           
-                          <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-500 font-mono">
+                          <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-550 font-mono">
                             <span>[{Math.round(ann.x1)}, {Math.round(ann.y1)}, {Math.round(ann.x2)}, {Math.round(ann.y2)}]</span>
-                            {ann.score && (
-                              <span>score: {ann.score.toFixed(2)}</span>
-                            )}
                           </div>
                         </div>
                       );
