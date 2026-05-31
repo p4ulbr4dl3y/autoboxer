@@ -10,7 +10,6 @@ interface CreateProjectModalProps {
 export default function CreateProjectModal({ isOpen, onClose, onCreated }: CreateProjectModalProps) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
-  const [prompt, setPrompt] = useState('Locate objects.');
   const [projectClasses, setProjectClasses] = useState<{ name: string; prompt: string; color: string }[]>([
     { name: '', prompt: '', color: '#34C759' }
   ]);
@@ -38,10 +37,9 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
       await api.projects.create({
         name,
         description: desc || null,
-        default_prompt: prompt,
         classes: classesList,
       });
-      setName(''); setDesc(''); setPrompt('Locate objects.');
+      setName(''); setDesc('');
       setProjectClasses([{ name: '', prompt: '', color: '#34C759' }]);
       onClose();
       onCreated();
@@ -131,14 +129,6 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
                 </div>
               ))}
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Default AI Detection Prompt (Fallback)</label>
-            <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors" />
-            <p className="text-[10px] text-slate-550 mt-1">
-              💡 <strong>Hint:</strong> If you don't enter class-specific prompts, the fallback default prompt is used.
-            </p>
           </div>
           <div className="flex gap-4 pt-4 mt-2">
             <button type="button" onClick={onClose}

@@ -24,13 +24,6 @@ export default function Editor({
   const [canvasMode, setCanvasMode] = useState<'select' | 'draw'>('select');
   const [activeClass, setActiveClass] = useState<string>('');
 
-  // AI settings
-  const [editorPrompt, setEditorPrompt] = useState(project?.default_prompt || 'Locate objects.');
-  const [editorLabelMode, setEditorLabelMode] = useState<'overwrite' | 'merge'>('overwrite');
-  const [editorFilterByClasses, setEditorFilterByClasses] = useState(true);
-  const [editorTargetClassOption, setEditorTargetClassOption] = useState<'all' | 'active'>('all');
-  const [isAiRunning, setIsAiRunning] = useState(false);
-
   // Canvas sizing
   const [renderedWidth, setRenderedWidth] = useState(0);
   const [renderedHeight, setRenderedHeight] = useState(0);
@@ -55,18 +48,6 @@ export default function Editor({
       setActiveClass(classes[0].name);
     }
   }, [classes, activeClass]);
-
-  // Sync editor prompt with class selection
-  useEffect(() => {
-    if (editorTargetClassOption === 'active' && activeClass) {
-      setEditorPrompt(`Locate ${activeClass.toLowerCase()}.`);
-    } else if (editorTargetClassOption === 'all') {
-      const classNames = classes.map(c => c.name.toLowerCase());
-      if (classNames.length > 0) {
-        setEditorPrompt(`Locate ${classNames.join(' and ')}.`);
-      }
-    }
-  }, [editorTargetClassOption, activeClass, classes]);
 
   // Fetch annotations
   const fetchAnnotations = useCallback(async (imageId: number) => {
@@ -106,32 +87,6 @@ export default function Editor({
       return false;
     }
   }, [annotations, currentImageId, setImages]);
-
-  // Auto-label current image
-  const handleAutoLabelCurrent = async () => {
-    setIsAiRunning(true);
-    try {
-      const params = new URLSearchParams();
-      if (editorPrompt) params.append('prompt', editorPrompt);
-      params.append('mode', editorLabelMode);
-      params.append('filter_by_classes', editorFilterByClasses.toString());
-      if (editorTargetClassOption === 'active' && activeClass) {
-        params.append('target_classes', activeClass);
-      }
-      const data = await api.images.autoLabel(currentImageId, params);
-      const mapped = data.map((ann: Annotation) => {
-        const cls = classes.find(c => c.name === ann.label);
-        return { ...ann, color: cls ? cls.color : '#34C759' };
-      });
-      setAnnotations(mapped);
-      if (mapped.length > 0) setSelectedAnnId(mapped[0].id);
-      setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: 'labeled' } : img));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsAiRunning(false);
-    }
-  };
 
   // Navigation
   const handleNextImage = async () => {
@@ -433,55 +388,6 @@ export default function Editor({
 
       {/* Right sidebar */}
       <aside className="w-80 border-l border-slate-850 bg-slate-900/40 backdrop-blur-md flex flex-col flex-shrink-0">
-        {/* AI panel */}
-        <div className="p-5 border-b border-slate-850 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-1">AI Smart Auto-Labeler</h3>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Prompt</label>
-            <input type="text" value={editorPrompt} onChange={e => setEditorPrompt(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 mb-2.5" />
-            <div className="flex gap-2.5">
-              <div className="flex-1">
-                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mode</label>
-                <select value={editorLabelMode} onChange={e => setEditorLabelMode(e.target.value as 'overwrite' | 'merge')}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-100 focus:outline-none focus:border-indigo-500">
-                  <option value="overwrite">Overwrite</option>
-                  <option value="merge">Merge</option>
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Target Class</label>
-                <select value={editorTargetClassOption} onChange={e => setEditorTargetClassOption(e.target.value as 'all' | 'active')}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-[11px] text-slate-100 focus:outline-none focus:border-indigo-500">
-                  <option value="all">All Classes</option>
-                  <option value="active">Active ({activeClass})</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 pt-1.5">
-              <input type="checkbox" id="editor-filter-classes" checked={editorFilterByClasses}
-                onChange={e => setEditorFilterByClasses(e.target.checked)}
-                className="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 w-3.5 h-3.5 cursor-pointer" />
-              <label htmlFor="editor-filter-classes" className="text-[10px] font-semibold text-slate-400 cursor-pointer select-none">
-                Filter Detections by Project Classes
-              </label>
-            </div>
-          </div>
-          <button onClick={handleAutoLabelCurrent} disabled={isAiRunning}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2.5 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-500/10 active:scale-95 transition-all">
-            {isAiRunning ? (
-              <><svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>Running model...</>
-            ) : (
-              <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>Run Model Annotation</>
-            )}
-          </button>
-        </div>
-
         {/* Active class selection */}
         <div className="p-5 border-b border-slate-850 space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Drawing Class</h3>

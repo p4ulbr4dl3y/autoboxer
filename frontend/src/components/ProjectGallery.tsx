@@ -12,7 +12,7 @@ interface ProjectGalleryProps {
   setStatusFilter: (f: string) => void;
   setClasses: React.Dispatch<React.SetStateAction<ClassCategory[]>>;
   onOpenEditor: (imageId: number) => void;
-  onBatchLabel: (prompt: string, targetImages: 'unlabeled' | 'all', mode: 'overwrite' | 'merge', filterByClasses: boolean, targetClasses: string[]) => void;
+  onBatchLabel: () => void;
   onRefresh: () => void;
 }
 
@@ -24,8 +24,6 @@ export default function ProjectGallery({
   const [isUploading, setIsUploading] = useState(false);
   const [newClassName, setNewClassName] = useState('');
   const [newClassColor, setNewClassColor] = useState('#34C759');
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-
   const handleUploadImages = async () => {
     if (!uploadFiles) return;
     setIsUploading(true);
@@ -217,118 +215,15 @@ export default function ProjectGallery({
           </div>
         </div>
 
-        {/* AI Automation */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
-          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">AI Automation</h3>
-          <p className="text-[11px] text-slate-400 leading-relaxed mb-2">Configure and run the Locate Anything model on the project dataset in the background.</p>
-          <button onClick={() => setIsBatchModalOpen(true)} disabled={isBatchLabeling}
-            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Auto-Label All Images
-          </button>
-        </div>
+        <button onClick={onBatchLabel} disabled={isBatchLabeling}
+          className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Auto-Label All Images
+        </button>
       </div>
 
-      {/* Batch Modal - rendered inline */}
-      {isBatchModalOpen && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <BatchInlineModal
-            classes={classes}
-            onClose={() => setIsBatchModalOpen(false)}
-            onRun={(...args) => { onBatchLabel(...args); setIsBatchModalOpen(false); }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* Inline batch modal to avoid circular import with BatchModal.tsx */
-function BatchInlineModal({ classes, onClose, onRun }: {
-  classes: ClassCategory[];
-  onClose: () => void;
-  onRun: (prompt: string, targetImages: 'unlabeled' | 'all', mode: 'overwrite' | 'merge', filterByClasses: boolean, targetClasses: string[]) => void;
-}) {
-  const [prompt, setPrompt] = useState('');
-  const [targetImages, setTargetImages] = useState<'unlabeled' | 'all'>('unlabeled');
-  const [mode, setMode] = useState<'overwrite' | 'merge'>('overwrite');
-  const [filterByClasses, setFilterByClasses] = useState(true);
-  const [targetClasses, setTargetClasses] = useState<string[]>(classes.map(c => c.name));
-
-  const toggleClass = (name: string) => {
-    setTargetClasses(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name]);
-  };
-
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative">
-      <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white">
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-      <h3 className="text-xl font-bold mb-4">Batch Auto-Label Dataset</h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">AI Detection Prompt (Optional Override)</label>
-          <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)}
-            placeholder="Leave empty to use class-specific prompts (recommended)"
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition-colors" />
-        </div>
-        <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl space-y-2">
-          <div className="flex justify-between items-center">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">Target Classes</label>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setTargetClasses(classes.map(c => c.name))} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold">Select All</button>
-              <span className="text-[10px] text-slate-650">|</span>
-              <button type="button" onClick={() => setTargetClasses([])} className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold">Clear All</button>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {classes.map(cls => (
-              <button key={cls.id} type="button" onClick={() => toggleClass(cls.name)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                  targetClasses.includes(cls.name) ? 'bg-indigo-600/20 border-indigo-500/80 text-indigo-200 shadow-sm' : 'bg-slate-950/60 border-slate-850 text-slate-450 hover:border-slate-800'
-                }`}>
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cls.color }} />{cls.name}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Target Images</label>
-          <div className="grid grid-cols-2 gap-3">
-            {(['unlabeled', 'all'] as const).map(opt => (
-              <button key={opt} type="button" onClick={() => setTargetImages(opt)}
-                className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${targetImages === opt ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200' : 'bg-slate-950 border-slate-850 text-slate-450 hover:border-slate-800'}`}>
-                {opt === 'unlabeled' ? 'Unlabeled images only' : 'All images in dataset'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Labeling Mode</label>
-          <div className="grid grid-cols-2 gap-3">
-            {(['overwrite', 'merge'] as const).map(opt => (
-              <button key={opt} type="button" onClick={() => setMode(opt)}
-                className={`px-4 py-2 rounded-xl border text-xs font-semibold transition-all ${mode === opt ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200' : 'bg-slate-950 border-slate-850 text-slate-400 hover:border-slate-800'}`}>
-                {opt === 'overwrite' ? 'Overwrite existing' : 'Merge / Incremental'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-3 bg-slate-950/60 border border-slate-850/60 p-3 rounded-xl">
-          <input type="checkbox" checked={filterByClasses} onChange={e => setFilterByClasses(e.target.checked)}
-            className="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 w-4 h-4 cursor-pointer" />
-          <label className="text-xs font-medium text-slate-350 cursor-pointer select-none">Filter detections by project classes</label>
-        </div>
-        <div className="flex gap-4 pt-4 mt-2">
-          <button type="button" onClick={onClose} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-330 font-semibold py-2.5 rounded-xl text-sm transition-colors">Cancel</button>
-          <button type="button" onClick={() => onRun(prompt, targetImages, mode, filterByClasses, targetClasses)}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-sm shadow-lg shadow-indigo-500/10 transition-colors">Run Auto-Labeling</button>
-        </div>
-      </div>
     </div>
   );
 }

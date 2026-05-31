@@ -48,15 +48,12 @@ export default function App() {
     }
   }, [selectedProjectId, fetchProjectImages, fetchStats]);
 
-  const handleBatchLabel = useCallback(async (
-    prompt: string, targetImages: 'unlabeled' | 'all', mode: 'overwrite' | 'merge',
-    filterByClasses: boolean, targetClasses: string[],
-  ) => {
+  const handleBatchLabel = useCallback(async () => {
     if (!selectedProjectId) return;
     setIsBatchLabeling(true);
     try {
       await api.projects.batchAutoLabel(selectedProjectId, {
-        prompt, target_images: targetImages, mode, filter_by_classes: filterByClasses, target_classes: targetClasses,
+        prompt: '', target_images: 'unlabeled', mode: 'merge', filter_by_classes: true, target_classes: [],
       });
       await fetchStats(selectedProjectId);
 
