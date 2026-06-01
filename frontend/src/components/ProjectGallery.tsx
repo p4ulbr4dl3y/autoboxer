@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '../api/client';
 import type { Project, ProjectStats, ClassCategory, ImageItem } from '../types';
 import BatchModal from './BatchModal';
@@ -35,16 +35,13 @@ export default function ProjectGallery({
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [newClassName, setNewClassName] = useState('');
-  const [newClassColor, setNewClassColor] = useState('#34C759');
+  const [newClassColor, setNewClassColor] = useState(() => {
+    const nextIndex = classes.length % DEFAULT_COLORS.length;
+    return DEFAULT_COLORS[nextIndex];
+  });
   const [classError, setClassError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-
-  // Automatically cycle default color for new class based on existing classes length
-  useEffect(() => {
-    const nextIndex = classes.length % DEFAULT_COLORS.length;
-    setNewClassColor(DEFAULT_COLORS[nextIndex]);
-  }, [classes.length]);
 
   const handleUploadImages = async () => {
     if (!uploadFiles) return;
@@ -69,7 +66,12 @@ export default function ProjectGallery({
     setClassError(null);
     try {
       const added = await api.classes.create(project.id, { name: newClassName, color: newClassColor });
-      setClasses(prev => [...prev, added]);
+      setClasses(prev => {
+        const nextClasses = [...prev, added];
+        const nextIndex = nextClasses.length % DEFAULT_COLORS.length;
+        setNewClassColor(DEFAULT_COLORS[nextIndex]);
+        return nextClasses;
+      });
       setNewClassName('');
     } catch (e) {
       setClassError((e as Error).message);
@@ -296,13 +298,15 @@ export default function ProjectGallery({
         </button>
       </div>
 
-      <BatchModal
-        isOpen={isBatchModalOpen}
-        classes={classes}
-        stats={stats}
-        onClose={() => setIsBatchModalOpen(false)}
-        onConfirm={onBatchLabel}
-      />
+      {isBatchModalOpen && (
+        <BatchModal
+          isOpen={isBatchModalOpen}
+          classes={classes}
+          stats={stats}
+          onClose={() => setIsBatchModalOpen(false)}
+          onConfirm={onBatchLabel}
+        />
+      )}
 
     </div>
   );

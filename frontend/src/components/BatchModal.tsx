@@ -14,22 +14,13 @@ interface BatchModalProps {
 }
 
 export default function BatchModal({ isOpen, classes, stats, onClose, onConfirm }: BatchModalProps) {
-  const [targetImages, setTargetImages] = useState<'all' | 'unlabeled'>('unlabeled');
+  const [targetImages, setTargetImages] = useState<'all' | 'unlabeled'>(() => 
+    stats && stats.unlabeled_images === 0 ? 'all' : 'unlabeled'
+  );
   const [overlapMode, setOverlapMode] = useState<'merge' | 'overwrite'>('merge');
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
-
-  // Reset/sync selected classes when classes change or modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedClasses(classes.map(c => c.name));
-      // If there are no unlabeled images left, default to targeting "all" images
-      if (stats && stats.unlabeled_images === 0) {
-        setTargetImages('all');
-      } else {
-        setTargetImages('unlabeled');
-      }
-    }
-  }, [isOpen, classes, stats]);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>(() => 
+    classes.map(c => c.name)
+  );
 
   // Close on Escape while the modal is open.
   useEffect(() => {

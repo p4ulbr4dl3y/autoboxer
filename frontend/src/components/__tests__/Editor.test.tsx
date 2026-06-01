@@ -26,7 +26,9 @@ describe('Editor Component', () => {
     { id: 2, name: 'dog', color: '#FF3B30', prompt: 'Locate dogs.', created_at: '' }
   ];
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockState: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let mockActions: any;
 
   beforeEach(() => {
