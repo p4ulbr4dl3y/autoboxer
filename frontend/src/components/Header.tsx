@@ -1,10 +1,11 @@
+import { Link } from 'react-router-dom';
+
 interface HeaderProps {
   view: 'dashboard' | 'project' | 'editor';
   selectedProjectId: number | null;
-  onNavigate: (view: 'dashboard' | 'project') => void;
 }
 
-export default function Header({ view, selectedProjectId, onNavigate }: HeaderProps) {
+export default function Header({ view, selectedProjectId }: HeaderProps) {
   return (
     <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-50">
       <div className="flex items-center gap-3">
@@ -19,19 +20,19 @@ export default function Header({ view, selectedProjectId, onNavigate }: HeaderPr
         </div>
       </div>
       <div className="flex items-center gap-4">
-        <button
-          onClick={() => onNavigate('dashboard')}
+        <Link
+          to="/"
           className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${view === 'dashboard' ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-400 hover:text-white'}`}
         >
           Dashboard
-        </button>
+        </Link>
         {selectedProjectId && (
-          <button
-            onClick={() => onNavigate('project')}
+          <Link
+            to={`/projects/${selectedProjectId}`}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${view === 'project' ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-400 hover:text-white'}`}
           >
             Gallery
-          </button>
+          </Link>
         )}
       </div>
     </header>

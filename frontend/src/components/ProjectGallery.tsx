@@ -171,7 +171,7 @@ export default function ProjectGallery({
                         img.status === 'labeled' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
                         img.status === 'in_progress' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse' :
                         'bg-slate-800 text-slate-400 border border-slate-700'
-                      }`}>{img.status}</span>
+                      }`}>{img.status.replace('_', ' ')}</span>
                     </div>
                   </div>
                 </div>

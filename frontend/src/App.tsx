@@ -1,78 +1,51 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import './App.css';
 import { useProjects, useProjectDetail } from './hooks/useProjects';
 import { api } from './api/client';
-import Header from './components/Header';
-import Dashboard from './components/Dashboard';
-import CreateProjectModal from './components/CreateProjectModal';
-import ProjectGallery from './components/ProjectGallery';
-import Editor from './components/Editor';
+import AppContext from './context/AppContext';
+import AppLayout from './layouts/AppLayout';
+import DashboardPage from './pages/DashboardPage';
+import ProjectGalleryPage from './pages/ProjectGalleryPage';
+import EditorPage from './pages/EditorPage';
 import ConfirmModal from './components/ConfirmModal';
 
 export default function App() {
-  const [view, setView] = useState<'dashboard' | 'project' | 'editor'>('dashboard');
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
-  const [currentImageId, setCurrentImageId] = useState<number | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [isBatchLabeling, setIsBatchLabeling] = useState(false);
-
   // Confirmation / info modals
   const [deleteProjectId, setDeleteProjectId] = useState<number | null>(null);
   const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
   const [deleteClassInfo, setDeleteClassInfo] = useState<{ id: number; name: string } | null>(null);
 
-  // Editor unsaved-changes guard
-  const [editorDirty, setEditorDirty] = useState(false);
-  const [pendingNav, setPendingNav] = useState<'dashboard' | 'project' | null>(null);
+  const [isBatchLabeling, setIsBatchLabeling] = useState(false);
 
   const { projects, stats, fetchProjects, fetchStats, deleteProject } = useProjects();
   const {
     images, setImages, classes, setClasses,
     statusFilter, setStatusFilter, fetchProjectDetails, fetchProjectImages,
-  } = useProjectDetail(selectedProjectId);
-
-  const selectedProject = projects.find(p => p.id === selectedProjectId);
+  } = useProjectDetail(null);
 
   // Tracks the currently-open project so async pollers can detect navigation
   // away and stop touching another project's state.
-  const selectedProjectIdRef = useRef(selectedProjectId);
-  useEffect(() => { selectedProjectIdRef.current = selectedProjectId; }, [selectedProjectId]);
+  const currentProjectIdRef = useRef<number | null>(null);
 
-  const handleOpenProject = useCallback(async (id: number) => {
-    setSelectedProjectId(id);
-    await fetchProjectDetails(id);
-    await fetchStats(id);
-    setView('project');
-  }, [fetchProjectDetails, fetchStats]);
-
-  const doNavigate = useCallback((target: 'dashboard' | 'project') => {
-    if (target === 'dashboard') setSelectedProjectId(null);
-    setView(target);
-    setEditorDirty(false);
-  }, []);
-
-  const handleHeaderNavigate = useCallback((target: 'dashboard' | 'project') => {
-    // Guard against silently dropping unsaved annotations when leaving the editor.
-    if (view === 'editor' && editorDirty) { setPendingNav(target); return; }
-    doNavigate(target);
-  }, [view, editorDirty, doNavigate]);
-
-  const handleOpenEditor = useCallback((imageId: number) => {
-    setCurrentImageId(imageId);
-    setView('editor');
-  }, []);
-
-  const handleSaveAndExit = useCallback(() => {
-    setView('project');
-    if (selectedProjectId) {
-      fetchProjectImages(selectedProjectId);
-      fetchStats(selectedProjectId);
+  const handleDeleteClass = useCallback(async (classId: number) => {
+    try {
+      await api.classes.delete(classId);
+      setClasses(prev => prev.filter(c => c.id !== classId));
+      // We need to find the current project ID from the URL, but since we're
+      // in a callback, we'll just refresh projects list
+      await fetchProjects();
+    } catch (e: any) {
+      setErrorModal({ title: 'Delete Class Failed', message: e.message });
     }
-  }, [selectedProjectId, fetchProjectImages, fetchStats]);
+  }, [setClasses, fetchProjects]);
 
   const handleBatchLabel = useCallback(async () => {
-    if (!selectedProjectId) return;
-    const s = stats[selectedProjectId];
+    // Get current project ID from the first image or classes
+    const projectId = images.length > 0 ? images[0].project_id : classes.length > 0 ? classes[0].project_id : null;
+    if (!projectId) return;
+
+    const s = stats[projectId];
     const totalImages = s ? s.total_images : images.length;
     if (totalImages === 0) {
       setErrorModal({ title: 'No Images', message: 'Upload some images before running auto-labeling.' });
@@ -87,16 +60,17 @@ export default function App() {
       return;
     }
     setIsBatchLabeling(true);
+    currentProjectIdRef.current = projectId;
     try {
-      await api.projects.batchAutoLabel(selectedProjectId, {
+      await api.projects.batchAutoLabel(projectId, {
         prompt: '', target_images: 'unlabeled', mode: 'merge', filter_by_classes: true, target_classes: [],
       });
-      await fetchStats(selectedProjectId);
+      await fetchStats(projectId);
 
-      const pid = selectedProjectId;
+      const pid = projectId;
       const poll = async () => {
         // Stop polling if the user navigated to another project / the dashboard.
-        if (selectedProjectIdRef.current !== pid) {
+        if (currentProjectIdRef.current !== pid) {
           setIsBatchLabeling(false);
           return;
         }
@@ -104,6 +78,7 @@ export default function App() {
           const s = await api.projects.stats(pid);
           if (s.batch_in_progress) {
             await fetchProjectImages(pid);
+            await fetchStats(pid);
             setTimeout(poll, 2000);
           } else {
             setIsBatchLabeling(false);
@@ -119,83 +94,39 @@ export default function App() {
       setErrorModal({ title: 'Batch Labeling Failed', message: e.message });
       setIsBatchLabeling(false);
     }
-  }, [selectedProjectId, images.length, classes.length, stats, fetchStats, fetchProjectImages]);
+  }, [images, classes, stats, fetchStats, fetchProjectImages]);
 
   const handleConfirmDeleteProject = useCallback(async () => {
     if (deleteProjectId === null) return;
     try {
       await deleteProject(deleteProjectId);
-      if (selectedProjectId === deleteProjectId) {
-        setSelectedProjectId(null);
-        setView('dashboard');
-      }
+      setDeleteProjectId(null);
     } catch (e: any) {
       setErrorModal({ title: 'Delete Failed', message: e.message });
     }
-  }, [deleteProjectId, selectedProjectId, deleteProject]);
+  }, [deleteProjectId, deleteProject]);
 
-  const handleDeleteClass = useCallback(async (classId: number) => {
-    try {
-      await api.classes.delete(classId);
-      setClasses(prev => prev.filter(c => c.id !== classId));
-      if (selectedProjectId) {
-        await fetchProjectImages(selectedProjectId);
-        await fetchStats(selectedProjectId);
-      }
-    } catch (e: any) {
-      setErrorModal({ title: 'Delete Class Failed', message: e.message });
-    }
-  }, [selectedProjectId, setClasses, fetchProjectImages, fetchStats]);
+  const contextValue = {
+    projects, stats, fetchProjects, fetchStats, deleteProject,
+    images, setImages, classes, setClasses,
+    statusFilter, setStatusFilter, fetchProjectDetails, fetchProjectImages,
+    deleteProjectId, setDeleteProjectId,
+    deleteClassInfo, setDeleteClassInfo,
+    errorModal, setErrorModal,
+    isBatchLabeling, handleBatchLabel,
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      <Header view={view} selectedProjectId={selectedProjectId} onNavigate={handleHeaderNavigate} />
+    <AppContext.Provider value={contextValue}>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="projects/:projectId" element={<ProjectGalleryPage />} />
+          <Route path="projects/:projectId/images/:imageId" element={<EditorPage />} />
+        </Route>
+      </Routes>
 
-      <main className="flex-1 flex flex-col">
-        {view === 'dashboard' && (
-          <>
-            <Dashboard
-              projects={projects} stats={stats}
-              onOpenProject={handleOpenProject} onDeleteProject={id => setDeleteProjectId(id)}
-              onCreateNew={() => setIsCreateModalOpen(true)}
-            />
-            <CreateProjectModal
-              isOpen={isCreateModalOpen}
-              onClose={() => setIsCreateModalOpen(false)}
-              onCreated={fetchProjects}
-            />
-          </>
-        )}
-
-        {view === 'project' && selectedProjectId && selectedProject && (
-          <ProjectGallery
-            project={selectedProject} stats={stats[selectedProjectId]}
-            images={images} classes={classes}
-            statusFilter={statusFilter} isBatchLabeling={isBatchLabeling}
-            setStatusFilter={setStatusFilter} setClasses={setClasses}
-            onOpenEditor={handleOpenEditor} onBatchLabel={handleBatchLabel}
-            onDeleteClass={classId => {
-              const cls = classes.find(c => c.id === classId);
-              if (cls) setDeleteClassInfo({ id: classId, name: cls.name });
-            }}
-            onRefresh={() => { fetchProjectDetails(selectedProjectId); fetchStats(selectedProjectId); }}
-            onError={(title, message) => setErrorModal({ title, message })}
-          />
-        )}
-
-        {view === 'editor' && currentImageId && (
-          <Editor
-            currentImageId={currentImageId} images={images} classes={classes}
-            onSaveAndExit={handleSaveAndExit}
-            onImageChange={setCurrentImageId}
-            setImages={setImages}
-            onError={(title, message) => setErrorModal({ title, message })}
-            onDirtyChange={setEditorDirty}
-          />
-        )}
-      </main>
-
-      {/* Delete project confirmation */}
+      {/* Global modals */}
       <ConfirmModal
         isOpen={deleteProjectId !== null}
         title="Delete Project"
@@ -206,7 +137,6 @@ export default function App() {
         onClose={() => setDeleteProjectId(null)}
       />
 
-      {/* Delete class confirmation */}
       <ConfirmModal
         isOpen={deleteClassInfo !== null}
         title="Delete Class"
@@ -217,19 +147,6 @@ export default function App() {
         onClose={() => setDeleteClassInfo(null)}
       />
 
-      {/* Unsaved-changes guard when leaving the editor */}
-      <ConfirmModal
-        isOpen={pendingNav !== null}
-        title="Unsaved Changes"
-        message="You have unsaved annotation changes. Leave the editor without saving? Your changes will be lost."
-        confirmLabel="Discard & Leave"
-        cancelLabel="Keep Editing"
-        variant="danger"
-        onConfirm={() => { if (pendingNav) doNavigate(pendingNav); }}
-        onClose={() => setPendingNav(null)}
-      />
-
-      {/* Error / info modal */}
       <ConfirmModal
         isOpen={errorModal !== null}
         title={errorModal?.title || 'Error'}
@@ -239,6 +156,6 @@ export default function App() {
         onConfirm={() => {}}
         onClose={() => setErrorModal(null)}
       />
-    </div>
+    </AppContext.Provider>
   );
 }

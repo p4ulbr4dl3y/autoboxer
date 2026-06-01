@@ -49,7 +49,7 @@ export default function ConfirmModal({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h3 className="text-lg font-bold mb-2">{title}</h3>
+        <h3 className="text-lg font-bold mb-2 text-slate-100">{title}</h3>
         <p className="text-sm text-slate-400 leading-relaxed mb-6">{message}</p>
         <div className="flex gap-3">
           {variant !== 'info' && (
