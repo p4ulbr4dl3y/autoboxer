@@ -29,8 +29,8 @@ export default function App() {
       await api.classes.delete(classId);
       setClasses(prev => prev.filter(c => c.id !== classId));
       await fetchProjects();
-    } catch (e: any) {
-      setErrorModal({ title: 'Delete Class Failed', message: e.message });
+    } catch (e) {
+      setErrorModal({ title: 'Delete Class Failed', message: (e as Error).message });
     }
   }, [setClasses, fetchProjects]);
 
@@ -82,8 +82,8 @@ export default function App() {
         }
       };
       setTimeout(poll, 2000);
-    } catch (e: any) {
-      setErrorModal({ title: 'Batch Labeling Failed', message: e.message });
+    } catch (e) {
+      setErrorModal({ title: 'Batch Labeling Failed', message: (e as Error).message });
       setIsBatchLabeling(false);
     }
   }, [images, classes, stats, fetchStats, fetchProjectImages]);
@@ -93,8 +93,8 @@ export default function App() {
     try {
       await deleteProject(deleteProjectId);
       setDeleteProjectId(null);
-    } catch (e: any) {
-      setErrorModal({ title: 'Delete Failed', message: e.message });
+    } catch (e) {
+      setErrorModal({ title: 'Delete Failed', message: (e as Error).message });
     }
   }, [deleteProjectId, deleteProject]);
 

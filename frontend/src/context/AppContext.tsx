@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext } from 'react';
 import type { Project, ProjectStats, ClassCategory, ImageItem } from '../types';
 

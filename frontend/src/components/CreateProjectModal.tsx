@@ -55,8 +55,8 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
       setProjectClasses([{ name: '', prompt: '', color: '#34C759' }]);
       onClose();
       onCreated();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setIsSubmitting(false);
     }

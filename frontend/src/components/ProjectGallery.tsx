@@ -38,9 +38,9 @@ export default function ProjectGallery({
       const fileInput = document.getElementById('file-upload-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       onRefresh();
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      onError?.('Upload Failed', e?.message || 'Could not upload the selected images. Please try again.');
+      onError?.('Upload Failed', (e as Error)?.message || 'Could not upload the selected images. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -54,8 +54,8 @@ export default function ProjectGallery({
       const added = await api.classes.create(project.id, { name: newClassName, color: newClassColor });
       setClasses(prev => [...prev, added]);
       setNewClassName('');
-    } catch (e: any) {
-      setClassError(e.message);
+    } catch (e) {
+      setClassError((e as Error).message);
     }
   };
 
@@ -63,9 +63,9 @@ export default function ProjectGallery({
     try {
       const updated = await api.classes.update(classId, { prompt: newPrompt });
       setClasses(prev => prev.map(c => c.id === classId ? updated : c));
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      onError?.('Could Not Save Prompt', e?.message || 'Failed to update the locating prompt.');
+      onError?.('Could Not Save Prompt', (e as Error)?.message || 'Failed to update the locating prompt.');
     }
   };
 

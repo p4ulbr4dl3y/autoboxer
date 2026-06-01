@@ -108,7 +108,7 @@ def _export_coco(zip_file: zipfile.ZipFile, images: list, project, class_to_id: 
         },
         "images": [],
         "annotations": [],
-        "categories": [{"id": idx, "name": name, "supercategory": "object"} for name, idx in class_to_id.items()]
+        "categories": [{"id": idx + 1, "name": name, "supercategory": "object"} for name, idx in class_to_id.items()]
     }
 
     ann_counter = 1
@@ -130,7 +130,8 @@ def _export_coco(zip_file: zipfile.ZipFile, images: list, project, class_to_id: 
         })
 
         for ann in db_image.annotations:
-            c_id = class_to_id.get(ann.label, 0)
+            # Shift by 1 for 1-based indexing in COCO
+            c_id = class_to_id.get(ann.label, 0) + 1
             w_box = ann.x2 - ann.x1
             h_box = ann.y2 - ann.y1
             coco_data["annotations"].append({

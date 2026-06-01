@@ -6,16 +6,6 @@ export function useProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [stats, setStats] = useState<Record<number, ProjectStats>>({});
 
-  const fetchProjects = useCallback(async () => {
-    try {
-      const data = await api.projects.list();
-      setProjects(data);
-      data.forEach((p: Project) => fetchStats(p.id));
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
   const fetchStats = useCallback(async (id: number) => {
     try {
       const data = await api.projects.stats(id);
@@ -25,8 +15,21 @@ export function useProjects() {
     }
   }, []);
 
+  const fetchProjects = useCallback(async () => {
+    try {
+      const data = await api.projects.list();
+      setProjects(data);
+      data.forEach((p: Project) => fetchStats(p.id));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [fetchStats]);
+
   useEffect(() => {
-    fetchProjects();
+    const load = async () => {
+      await fetchProjects();
+    };
+    load();
   }, [fetchProjects]);
 
   const deleteProject = useCallback(async (id: number) => {
@@ -42,16 +45,6 @@ export function useProjectDetail(projectId: number | null) {
   const [classes, setClasses] = useState<ClassCategory[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const fetchProjectDetails = useCallback(async (pid: number) => {
-    try {
-      const proj = await api.projects.get(pid);
-      setClasses(proj.classes);
-      await fetchProjectImages(pid);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
   const fetchProjectImages = useCallback(async (pid: number, filter?: string) => {
     try {
       const data = await api.images.list(pid, filter ?? statusFilter);
@@ -61,9 +54,22 @@ export function useProjectDetail(projectId: number | null) {
     }
   }, [statusFilter]);
 
+  const fetchProjectDetails = useCallback(async (pid: number) => {
+    try {
+      const proj = await api.projects.get(pid);
+      setClasses(proj.classes);
+      await fetchProjectImages(pid);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [fetchProjectImages]);
+
   useEffect(() => {
     if (projectId) {
-      fetchProjectImages(projectId);
+      const load = async () => {
+        await fetchProjectImages(projectId);
+      };
+      load();
     }
   }, [statusFilter, projectId, fetchProjectImages]);
 

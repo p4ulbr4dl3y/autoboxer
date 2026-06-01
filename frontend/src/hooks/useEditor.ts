@@ -197,33 +197,38 @@ export function useEditor(
   const [isDirty, setIsDirty] = useState(false);
 
   // ── Undo / Redo ─────────────────────────────────────────────────────────
-  const historyPast = useRef<Annotation[][]>([]);
-  const historyFuture = useRef<Annotation[][]>([]);
+  const [historyPast, setHistoryPast] = useState<Annotation[][]>([]);
+  const [historyFuture, setHistoryFuture] = useState<Annotation[][]>([]);
 
   const pushHistory = useCallback((snapshot: Annotation[]) => {
-    historyPast.current.push(snapshot);
-    if (historyPast.current.length > MAX_HISTORY) historyPast.current.shift();
-    historyFuture.current = [];
+    setHistoryPast(prev => {
+      const next = [...prev, snapshot];
+      if (next.length > MAX_HISTORY) next.shift();
+      return next;
+    });
+    setHistoryFuture([]);
   }, []);
 
   const undo = useCallback(() => {
-    if (historyPast.current.length === 0) return;
-    const prev = historyPast.current.pop()!;
-    historyFuture.current.push(cloneAnnotations(annotations));
+    if (historyPast.length === 0) return;
+    const prev = historyPast[historyPast.length - 1];
+    setHistoryPast(prevHistory => prevHistory.slice(0, -1));
+    setHistoryFuture(prevFuture => [...prevFuture, cloneAnnotations(annotations)]);
     setAnnotations(prev);
     setIsDirty(true);
-  }, [annotations]);
+  }, [annotations, historyPast]);
 
   const redo = useCallback(() => {
-    if (historyFuture.current.length === 0) return;
-    const next = historyFuture.current.pop()!;
-    historyPast.current.push(cloneAnnotations(annotations));
+    if (historyFuture.length === 0) return;
+    const next = historyFuture[historyFuture.length - 1];
+    setHistoryFuture(prevFuture => prevFuture.slice(0, -1));
+    setHistoryPast(prevHistory => [...prevHistory, cloneAnnotations(annotations)]);
     setAnnotations(next);
     setIsDirty(true);
-  }, [annotations]);
+  }, [annotations, historyFuture]);
 
-  const canUndo = historyPast.current.length > 0;
-  const canRedo = historyFuture.current.length > 0;
+  const canUndo = historyPast.length > 0;
+  const canRedo = historyFuture.length > 0;
 
   // ── Zoom / Pan ──────────────────────────────────────────────────────────
   const [zoom, setZoom] = useState(1);
@@ -329,18 +334,23 @@ export function useEditor(
     if (renderedWidth === 0 || renderedHeight === 0) return;
     const clamped = clampPan(zoom, panX, panY);
     if (clamped.x !== panX || clamped.y !== panY) {
-      setPanX(clamped.x);
-      setPanY(clamped.y);
+      const handle = requestAnimationFrame(() => {
+        setPanX(clamped.x);
+        setPanY(clamped.y);
+      });
+      return () => cancelAnimationFrame(handle);
     }
   }, [zoom, panX, panY, renderedWidth, renderedHeight, clampPan]);
 
-  // Reset zoom/pan when image changes
-  useEffect(() => {
+  // Reset zoom/pan during rendering when image changes
+  const [prevImageId, setPrevImageId] = useState(currentImageId);
+  if (currentImageId !== prevImageId) {
+    setPrevImageId(currentImageId);
     setZoom(1);
     setPanX(0);
     setPanY(0);
     setIsPanning(false);
-  }, [currentImageId]);
+  }
 
   // ── Drawing state ───────────────────────────────────────────────────────
   const [isDrawing, setIsDrawing] = useState(false);
@@ -377,12 +387,10 @@ export function useEditor(
     return () => window.removeEventListener('beforeunload', handler);
   }, [isDirty]);
 
-  // ── Active class init ───────────────────────────────────────────────────
-  useEffect(() => {
-    if (classes.length > 0 && !activeClass) {
-      setActiveClass(classes[0].name);
-    }
-  }, [classes, activeClass]);
+  // ── Active class init during rendering ──────────────────────────────────
+  if (classes.length > 0 && !activeClass) {
+    setActiveClass(classes[0].name);
+  }
 
   // ── Fetch annotations ───────────────────────────────────────────────────
   const fetchAnnotations = useCallback(async (imageId: number) => {
@@ -395,15 +403,18 @@ export function useEditor(
       setAnnotations(mapped);
       setSelectedAnnId(mapped.length > 0 ? mapped[0].id : null);
       setIsDirty(false);
-      historyPast.current = [];
-      historyFuture.current = [];
+      setHistoryPast([]);
+      setHistoryFuture([]);
     } catch (e) {
       console.error(e);
     }
   }, [classes]);
 
   useEffect(() => {
-    fetchAnnotations(currentImageId);
+    const load = async () => {
+      await fetchAnnotations(currentImageId);
+    };
+    load();
   }, [currentImageId, fetchAnnotations]);
 
   // ── Save annotations ────────────────────────────────────────────────────
@@ -422,9 +433,10 @@ export function useEditor(
       setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: newStatus } : img));
       setIsDirty(false);
       return true;
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
-      onError?.('Save Failed', e?.message || 'Could not save annotations. Please try again.');
+      const err = e as Error;
+      onError?.('Save Failed', err?.message || 'Could not save annotations. Please try again.');
       return false;
     }
   }, [annotations, currentImageId, setImages, onError]);
@@ -600,7 +612,7 @@ export function useEditor(
     });
   }, [handlePointerMoveLogic]);
 
-  const handleCanvasPointerUp = useCallback((_e: React.PointerEvent<HTMLDivElement>) => {
+  const handleCanvasPointerUp = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
       return;
