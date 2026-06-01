@@ -101,6 +101,7 @@ export default function Editor({
     renderedWidth, renderedHeight,
     contextMenu,
     dimensionTooltip,
+    isAiLabeling,
   } = state;
 
   const {
@@ -112,6 +113,7 @@ export default function Editor({
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     imageContainerRef, imageRef,
     setZoom, setPanX, setPanY, handleWheel, handleResetZoom,
+    handleAutoLabelImage,
   } = actions;
 
   // ── Derived state ─────────────────────────────────────────────────────
@@ -421,6 +423,36 @@ export default function Editor({
             ))}
             {classes.length === 0 && <p className="text-slate-500 text-xs italic">No project classes defined.</p>}
           </div>
+        </div>
+
+        {/* AI Grounding Assistant */}
+        <div className="p-5 border-b border-slate-850 space-y-2.5">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">AI Assistant</h3>
+          <button
+            onClick={handleAutoLabelImage}
+            disabled={isAiLabeling || classes.length === 0}
+            className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-850 disabled:text-slate-500 disabled:border-transparent text-slate-955 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 shadow-md"
+          >
+            {isAiLabeling ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5 text-slate-955" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Locating Objects...
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Auto-Label with AI
+              </>
+            )}
+          </button>
+          {classes.length === 0 && (
+            <p className="text-[10px] text-slate-500 italic mt-0.5">Define at least one class category in project gallery first.</p>
+          )}
         </div>
 
         {/* Annotations list */}

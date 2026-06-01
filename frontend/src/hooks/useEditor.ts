@@ -7,12 +7,13 @@ import type { Annotation, ClassCategory, ImageItem } from '../types';
 export type ResizeMode = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'move';
 
 export interface EditorState {
-  // Annotations
+  // Core state
   annotations: Annotation[];
   selectedAnnId: number | string | null;
   canvasMode: 'select' | 'draw';
   activeClass: string;
   isDirty: boolean;
+  isAiLabeling: boolean;
 
   // Undo/Redo
   canUndo: boolean;
@@ -86,6 +87,7 @@ export interface EditorActions {
   setPanY: (y: number | ((prev: number) => number)) => void;
   handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
   handleResetZoom: () => void;
+  handleAutoLabelImage: () => Promise<void>;
 
   // Space key tracking
   setSpaceHeld: (v: boolean) => void;
@@ -478,6 +480,31 @@ export function useEditor(
       return false;
     }
   }, [annotations, currentImageId, setImages, onError]);
+
+  // ── Single-Image AI Auto-Labeling ────────────────────────────────────────
+  const [isAiLabeling, setIsAiLabeling] = useState(false);
+
+  const handleAutoLabelImage = useCallback(async () => {
+    setIsAiLabeling(true);
+    try {
+      const params = new URLSearchParams();
+      const predicted = await api.images.autoLabel(currentImageId, params);
+      const mapped = predicted.map((ann: Annotation) => {
+        const cls = classes.find(c => c.name === ann.label);
+        return { ...ann, color: cls ? cls.color : '#34C759' };
+      });
+      setAnnotations(mapped);
+      setSelectedAnnId(mapped.length > 0 ? mapped[0].id : null);
+      setIsDirty(true);
+      const newStatus = mapped.length > 0 ? 'labeled' : 'unlabeled';
+      setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: newStatus } : img));
+    } catch (e) {
+      console.error(e);
+      onError?.('AI Auto-Label Failed', (e as Error).message || 'Single image auto-label prediction failed.');
+    } finally {
+      setIsAiLabeling(false);
+    }
+  }, [currentImageId, classes, setImages, onError]);
 
   // ── Navigation ──────────────────────────────────────────────────────────
   const handleNextImage = useCallback(async () => {
@@ -914,6 +941,7 @@ export function useEditor(
     renderedWidth, renderedHeight,
     contextMenu,
     dimensionTooltip,
+    isAiLabeling,
   };
 
   const actions: EditorActions = {
@@ -925,7 +953,7 @@ export function useEditor(
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     imageContainerRef, imageRef, updateRenderedDimensions,
     setZoom, setPanX, setPanY, handleWheel, handleResetZoom,
-    setSpaceHeld,
+    setSpaceHeld, handleAutoLabelImage,
   };
 
   return { state, actions, currentImage, currentImageIndex, handleStartResize };
