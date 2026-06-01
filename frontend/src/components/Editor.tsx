@@ -111,7 +111,7 @@ export default function Editor({
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     handleCopyFromPrev,
-    imageContainerRef, imageRef, updateRenderedDimensions,
+    imageContainerRef, imageRef,
     setZoom, setPanX, setPanY,
   } = actions;
 
@@ -315,15 +315,19 @@ export default function Editor({
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={handleCanvasPointerUp}
           onContextMenu={e => e.preventDefault()}
-          className={`relative border border-slate-800 shadow-2xl select-none touch-none overflow-hidden ${cursorClass}`}
-          style={{ maxWidth: '85%', maxHeight: '85%' }}>
+          className={`relative border border-slate-800 shadow-2xl select-none touch-none overflow-hidden w-[85%] h-[85%] ${cursorClass}`}>
           <div style={{
             transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
             transformOrigin: '0 0',
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
             <img ref={imageRef} src={api.images.fileUrl(currentImageId)} alt=""
-              onLoad={updateRenderedDimensions}
-              className="max-h-[85vh] max-w-full block pointer-events-none" />
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              className="block pointer-events-none" />
 
             {renderedWidth > 0 && renderedHeight > 0 && (
               <div className="absolute inset-0 w-full h-full pointer-events-auto z-20 overflow-hidden">

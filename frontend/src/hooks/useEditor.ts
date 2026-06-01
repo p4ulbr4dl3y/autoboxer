@@ -245,23 +245,100 @@ export function useEditor(
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
+  // Track the image container's own dimensions (it uses CSS w-[85%] h-[85%])
+  // and compute the actual rendered image size (object-fit: contain).
+  useEffect(() => {
+    const container = imageContainerRef.current;
+    if (!container) return;
+
+    const syncDimensions = () => {
+      const cw = container.clientWidth;
+      const ch = container.clientHeight;
+      if (cw === 0 || ch === 0) return;
+
+      if (currentImage?.width && currentImage?.height) {
+        // Compute actual image rendered size (object-fit: contain)
+        const containerAspect = cw / ch;
+        const imageAspect = currentImage.width / currentImage.height;
+        let w: number, h: number;
+        if (imageAspect > containerAspect) {
+          w = cw;
+          h = w / imageAspect;
+        } else {
+          h = ch;
+          w = h * imageAspect;
+        }
+        setRenderedWidth(Math.round(w));
+        setRenderedHeight(Math.round(h));
+      } else {
+        setRenderedWidth(cw);
+        setRenderedHeight(ch);
+      }
+    };
+
+    syncDimensions();
+    const ro = new ResizeObserver(syncDimensions);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [currentImageId, currentImage?.width, currentImage?.height]);
+
   const updateRenderedDimensions = useCallback(() => {
-    if (imageRef.current) {
-      setRenderedWidth(imageRef.current.clientWidth);
-      setRenderedHeight(imageRef.current.clientHeight);
-    }
+    // No-op: dimensions are computed from the container ResizeObserver.
+    // Kept for backward compatibility.
   }, []);
 
+  // Track the container's own dimensions for clampPan
+  const containerDimRef = useRef({ width: 0, height: 0 });
+
   useEffect(() => {
-    const el = imageRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateRenderedDimensions);
-      return () => window.removeEventListener('resize', updateRenderedDimensions);
+    const container = imageContainerRef.current;
+    if (!container) return;
+    const sync = () => {
+      containerDimRef.current = {
+        width: container.clientWidth,
+        height: container.clientHeight,
+      };
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [currentImageId]);
+
+  /**
+   * Clamp pan so the image never leaves the visible container area.
+   * - zoom >= 1: image edges must stay within [0, containerSize].
+   * - zoom < 1: image is centered (smaller than container).
+   */
+  const clampPan = useCallback((z: number, px: number, py: number): { x: number; y: number } => {
+    const cw = containerDimRef.current.width;
+    const ch = containerDimRef.current.height;
+    if (cw === 0 || ch === 0) return { x: px, y: py };
+
+    const imgW = renderedWidth * z;
+    const imgH = renderedHeight * z;
+
+    if (z >= 1) {
+      return {
+        x: Math.min(0, Math.max(cw - imgW, px)),
+        y: Math.min(0, Math.max(ch - imgH, py)),
+      };
+    } else {
+      const cx = (cw - imgW) / 2;
+      const cy = (ch - imgH) / 2;
+      return { x: cx, y: cy };
     }
-    const observer = new ResizeObserver(() => updateRenderedDimensions());
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [currentImageId, updateRenderedDimensions]);
+  }, [renderedWidth, renderedHeight]);
+
+  // Clamp pan after every zoom/pan change to keep the image in view
+  useEffect(() => {
+    if (renderedWidth === 0 || renderedHeight === 0) return;
+    const clamped = clampPan(zoom, panX, panY);
+    if (clamped.x !== panX || clamped.y !== panY) {
+      setPanX(clamped.x);
+      setPanY(clamped.y);
+    }
+  }, [zoom, panX, panY, renderedWidth, renderedHeight, clampPan]);
 
   // Reset zoom/pan when image changes
   useEffect(() => {
@@ -661,7 +738,6 @@ export function useEditor(
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
       setZoom(prevZoom => {
         const newZoom = Math.max(0.2, Math.min(8, prevZoom * zoomFactor));
-        // Zoom toward cursor
         const scale = newZoom / prevZoom;
         setPanX(prev => mouseX - (mouseX - prev) * scale);
         setPanY(prev => mouseY - (mouseY - prev) * scale);
