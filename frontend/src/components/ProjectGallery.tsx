@@ -15,11 +15,12 @@ interface ProjectGalleryProps {
   onBatchLabel: () => void;
   onDeleteClass: (classId: number) => void;
   onRefresh: () => void;
+  onError?: (title: string, message: string) => void;
 }
 
 export default function ProjectGallery({
   project, stats, images, classes, statusFilter, isBatchLabeling,
-  setStatusFilter, setClasses, onOpenEditor, onBatchLabel, onDeleteClass, onRefresh,
+  setStatusFilter, setClasses, onOpenEditor, onBatchLabel, onDeleteClass, onRefresh, onError,
 }: ProjectGalleryProps) {
   const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -37,8 +38,9 @@ export default function ProjectGallery({
       const fileInput = document.getElementById('file-upload-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       onRefresh();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      onError?.('Upload Failed', e?.message || 'Could not upload the selected images. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -61,8 +63,9 @@ export default function ProjectGallery({
     try {
       const updated = await api.classes.update(classId, { prompt: newPrompt });
       setClasses(prev => prev.map(c => c.id === classId ? updated : c));
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      onError?.('Could Not Save Prompt', e?.message || 'Failed to update the locating prompt.');
     }
   };
 

@@ -64,24 +64,35 @@ def delete_class(class_id: int, db: Session = Depends(get_db)):
     project_id = db_class.project_id
     class_name = db_class.name
 
-    # Find images that have annotations with this class label
-    affected_image_ids = (
-        db.query(Annotation.image_id)
-        .filter(Annotation.label == class_name)
-        .distinct()
-        .all()
-    )
-    affected_image_ids = [row[0] for row in affected_image_ids]
+    # Find images IN THIS PROJECT that carry annotations with this class label.
+    # Scoping by image -> project is essential: annotations are keyed only by
+    # label, so deleting globally would wipe identically-named classes in other
+    # projects.
+    affected_image_ids = [
+        row[0] for row in (
+            db.query(Annotation.image_id)
+            .join(ImageModel, Annotation.image_id == ImageModel.id)
+            .filter(ImageModel.project_id == project_id, Annotation.label == class_name)
+            .distinct()
+            .all()
+        )
+    ]
 
-    # Delete annotations with this class label
-    db.query(Annotation).filter(Annotation.label == class_name).delete()
-
-    # Mark affected images as unlabeled
+    # Delete only this project's annotations for the class.
     if affected_image_ids:
-        db.query(ImageModel).filter(
-            ImageModel.id.in_(affected_image_ids),
-            ImageModel.project_id == project_id
-        ).update({ImageModel.status: "unlabeled"}, synchronize_session="fetch")
+        db.query(Annotation).filter(
+            Annotation.image_id.in_(affected_image_ids),
+            Annotation.label == class_name,
+        ).delete(synchronize_session="fetch")
+
+    # Re-evaluate each affected image: it stays 'labeled' if other annotations
+    # remain, and only becomes 'unlabeled' once it has none.
+    for img_id in affected_image_ids:
+        remaining = db.query(Annotation).filter(Annotation.image_id == img_id).count()
+        db.query(ImageModel).filter(ImageModel.id == img_id).update(
+            {ImageModel.status: "labeled" if remaining > 0 else "unlabeled"},
+            synchronize_session=False,
+        )
 
     db.delete(db_class)
     db.commit()

@@ -119,7 +119,7 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
                   </div>
                   <div className="flex-1">
                     <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Class Name</label>
-                    <input type="text" required value={cls.name} placeholder="e.g. cat"
+                    <input type="text" value={cls.name} placeholder="e.g. cat"
                       onChange={e => {
                         const u = [...projectClasses]; const old = u[index].name;
                         u[index].name = e.target.value;

@@ -21,16 +21,15 @@ export default function ConfirmModal({
   onConfirm,
   onClose,
 }: ConfirmModalProps) {
-  // Close on Escape while the modal is open.
+  // Close on Escape while the modal is open. (Confirm is intentionally not
+  // bound to Enter: it would conflict with the editor's global Enter handler
+  // and risk accidental confirmation of destructive actions.)
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      else if (e.key === 'Enter') { onConfirm(); onClose(); }
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose, onConfirm]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 

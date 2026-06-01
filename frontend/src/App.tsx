@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import './App.css';
 import { useProjects, useProjectDetail } from './hooks/useProjects';
 import { api } from './api/client';
@@ -21,6 +21,10 @@ export default function App() {
   const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
   const [deleteClassInfo, setDeleteClassInfo] = useState<{ id: number; name: string } | null>(null);
 
+  // Editor unsaved-changes guard
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [pendingNav, setPendingNav] = useState<'dashboard' | 'project' | null>(null);
+
   const { projects, stats, fetchProjects, fetchStats, deleteProject } = useProjects();
   const {
     images, setImages, classes, setClasses,
@@ -29,6 +33,11 @@ export default function App() {
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
+  // Tracks the currently-open project so async pollers can detect navigation
+  // away and stop touching another project's state.
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  useEffect(() => { selectedProjectIdRef.current = selectedProjectId; }, [selectedProjectId]);
+
   const handleOpenProject = useCallback(async (id: number) => {
     setSelectedProjectId(id);
     await fetchProjectDetails(id);
@@ -36,10 +45,17 @@ export default function App() {
     setView('project');
   }, [fetchProjectDetails, fetchStats]);
 
-  const handleHeaderNavigate = useCallback(async (target: 'dashboard' | 'project') => {
+  const doNavigate = useCallback((target: 'dashboard' | 'project') => {
     if (target === 'dashboard') setSelectedProjectId(null);
     setView(target);
+    setEditorDirty(false);
   }, []);
+
+  const handleHeaderNavigate = useCallback((target: 'dashboard' | 'project') => {
+    // Guard against silently dropping unsaved annotations when leaving the editor.
+    if (view === 'editor' && editorDirty) { setPendingNav(target); return; }
+    doNavigate(target);
+  }, [view, editorDirty, doNavigate]);
 
   const handleOpenEditor = useCallback((imageId: number) => {
     setCurrentImageId(imageId);
@@ -77,16 +93,22 @@ export default function App() {
       });
       await fetchStats(selectedProjectId);
 
+      const pid = selectedProjectId;
       const poll = async () => {
+        // Stop polling if the user navigated to another project / the dashboard.
+        if (selectedProjectIdRef.current !== pid) {
+          setIsBatchLabeling(false);
+          return;
+        }
         try {
-          const s = await api.projects.stats(selectedProjectId);
+          const s = await api.projects.stats(pid);
           if (s.batch_in_progress) {
-            await fetchProjectImages(selectedProjectId);
+            await fetchProjectImages(pid);
             setTimeout(poll, 2000);
           } else {
             setIsBatchLabeling(false);
-            await fetchProjectImages(selectedProjectId);
-            await fetchStats(selectedProjectId);
+            await fetchProjectImages(pid);
+            await fetchStats(pid);
           }
         } catch {
           setIsBatchLabeling(false);
@@ -157,6 +179,7 @@ export default function App() {
               if (cls) setDeleteClassInfo({ id: classId, name: cls.name });
             }}
             onRefresh={() => { fetchProjectDetails(selectedProjectId); fetchStats(selectedProjectId); }}
+            onError={(title, message) => setErrorModal({ title, message })}
           />
         )}
 
@@ -167,6 +190,7 @@ export default function App() {
             onImageChange={setCurrentImageId}
             setImages={setImages}
             onError={(title, message) => setErrorModal({ title, message })}
+            onDirtyChange={setEditorDirty}
           />
         )}
       </main>
@@ -191,6 +215,18 @@ export default function App() {
         variant="danger"
         onConfirm={() => { if (deleteClassInfo) handleDeleteClass(deleteClassInfo.id); }}
         onClose={() => setDeleteClassInfo(null)}
+      />
+
+      {/* Unsaved-changes guard when leaving the editor */}
+      <ConfirmModal
+        isOpen={pendingNav !== null}
+        title="Unsaved Changes"
+        message="You have unsaved annotation changes. Leave the editor without saving? Your changes will be lost."
+        confirmLabel="Discard & Leave"
+        cancelLabel="Keep Editing"
+        variant="danger"
+        onConfirm={() => { if (pendingNav) doNavigate(pendingNav); }}
+        onClose={() => setPendingNav(null)}
       />
 
       {/* Error / info modal */}

@@ -10,10 +10,11 @@ interface EditorProps {
   onImageChange: (imageId: number) => void;
   setImages: React.Dispatch<React.SetStateAction<ImageItem[]>>;
   onError?: (title: string, message: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 export default function Editor({
-  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError,
+  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange,
 }: EditorProps) {
   const currentImage = images.find(img => img.id === currentImageId);
   const currentImageIndex = images.findIndex(img => img.id === currentImageId);
@@ -23,6 +24,19 @@ export default function Editor({
   const [selectedAnnId, setSelectedAnnId] = useState<number | string | null>(null);
   const [canvasMode, setCanvasMode] = useState<'select' | 'draw'>('select');
   const [activeClass, setActiveClass] = useState<string>('');
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Report unsaved-changes state upward so the app can guard navigation.
+  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
+
+  // Warn before a full page unload (refresh / tab close) when there are
+  // unsaved annotations.
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
 
   // Canvas sizing
   const [renderedWidth, setRenderedWidth] = useState(0);
@@ -59,6 +73,7 @@ export default function Editor({
       });
       setAnnotations(mapped);
       setSelectedAnnId(mapped.length > 0 ? mapped[0].id : null);
+      setIsDirty(false);
     } catch (e) {
       console.error(e);
     }
@@ -82,6 +97,7 @@ export default function Editor({
       await api.annotations.update(currentImageId, cleaned);
       const newStatus = cleaned.length > 0 ? 'labeled' : 'unlabeled';
       setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: newStatus } : img));
+      setIsDirty(false);
       return true;
     } catch (e: any) {
       console.error(e);
@@ -209,6 +225,7 @@ export default function Editor({
   };
 
   const handleCanvasMouseUp = () => {
+    const wasDragging = isDragging;
     if (isDrawing && currentImage) {
       setIsDrawing(false);
       const origW = currentImage.width || 1;
@@ -227,9 +244,11 @@ export default function Editor({
           label: activeClass || 'object', color: cls ? cls.color : '#34C759',
         }]);
         setSelectedAnnId(tempId);
+        setIsDirty(true);
       }
       setCanvasMode('select');
     }
+    if (wasDragging) setIsDirty(true);
     setIsDragging(false);
     setDraggedAnnId(null);
   };
@@ -237,6 +256,7 @@ export default function Editor({
   const handleDeleteAnnotation = (id: number | string) => {
     setAnnotations(prev => prev.filter(ann => ann.id !== id));
     if (selectedAnnId === id) setSelectedAnnId(null);
+    setIsDirty(true);
   };
 
   const handleChangeSelectedClass = (className: string) => {
@@ -245,12 +265,15 @@ export default function Editor({
     setAnnotations(prev => prev.map(ann =>
       ann.id === selectedAnnId ? { ...ann, label: className, color: cls ? cls.color : '#34C759' } : ann
     ));
+    setIsDirty(true);
   };
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Don't act on canvas shortcuts while a modal dialog is open over the editor.
+      if (document.querySelector('[role="dialog"]')) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedAnnId !== null) handleDeleteAnnotation(selectedAnnId);
       } else if (e.key === 'ArrowRight') {
