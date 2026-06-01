@@ -12,3 +12,19 @@ wheels/
 # Local SQLite databases and runtime storage
 *.db
 data/
+
+# macOS metadata
+.DS_Store
+
+# IDEs and editors
+.vscode/
+.idea/
+
+# Local test / preview files and cache
+test_images/
+preview/
+.pi/
+*.mov
+
+# Dependencies
+node_modules/

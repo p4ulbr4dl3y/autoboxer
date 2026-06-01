@@ -1,45 +1,42 @@
-# Autoboxer: Model-Assisted Image Labeling Studio
+# Autoboxer
 
-This repository contains the backend and frontend for **Autoboxer**, a full-featured web application designed for automatic and manual bounding box labeling, object segmentation, and target classification using Locate Anything, SAM3, and SigLIP2.
+Local AI-assisted visual grounding and object-detection labeling.
 
----
+![Autoboxer Demo](demo.gif)
 
-## 📂 Repository Structure
+Autoboxer automates image annotation using a local visual grounding model (such as NVIDIA's LocateAnything-3B). It turns weeks of manual bounding box annotation into a fast, local workflow.
 
-- [backend/](file:///Users/yegor/autoboxer/backend): FastAPI service managing the SQLite database, custom classes, image file uploads, background batch annotations, and YOLO/COCO dataset exports.
-- [frontend/](file:///Users/yegor/autoboxer/frontend): React, TypeScript, and Tailwind CSS v4 single-page application (SPA) containing the interactive gallery dashboard and annotation editor canvas.
+## Prerequisites
 
----
+- Python 3.10+ (managed via uv)
+- Node.js 18+ and npm
 
-## 🚀 Getting Started
+## Getting Started
 
-### 1. Start the Backend API
-First, start the FastAPI server in the `backend` folder:
+### Quick Start
 
+Run both frontend and backend services with a single command:
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+This launches the backend on `http://localhost:8000` and the frontend on `http://localhost:5173`.
+
+### Manual Launch
+
+If you prefer to start the services separately:
+
+**Backend**
 ```bash
 cd backend
 uv run main.py
 ```
 
-- API Base: `http://localhost:8000`
-- Swagger Docs: `http://localhost:8000/docs`
-
-### 2. Start the Frontend Client
-In a new terminal window, start the React dev server in the `frontend` folder:
-
+**Frontend**
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
-
-- Web Client Base: `http://localhost:5173` (or the address printed in the dev console).
-
----
-
-## 🎨 Features & Capabilities
-
-- **Project Galleries**: Organizes annotations by project/datasets.
-- **AI Auto-Labeling**: Integrates Locate Anything + SAM3 + SigLIP2/FAISS vector classification.
-- **Background Queues**: Annotate entire directories of images concurrently without freezing the UI.
-- **Interactive Canvas**: Drag-and-resize bounding boxes, select classes, and preview SAM3 boundaries in real time.
-- **Format Export**: Direct ZIP download of labeled datasets in standard YOLO or COCO JSON formats.
