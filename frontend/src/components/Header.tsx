@@ -9,16 +9,7 @@ export default function Header({ view, selectedProjectId }: HeaderProps) {
   return (
     <header className="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur-md px-8 py-3.5 flex items-center justify-between sticky top-0 z-50">
       <div className="flex items-center gap-3">
-        {/* Sleek monochromatic logo icon matching oMLX */}
-        <div className="w-8 h-8 rounded-lg bg-slate-850 border border-slate-750 flex items-center justify-center shadow-md">
-          <svg className="w-4 h-4 text-slate-100" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-          </svg>
-        </div>
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-base font-bold text-slate-50 tracking-tight">Autoboxer</h1>
-          <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider bg-slate-850 px-1.5 py-0.5 rounded-md border border-slate-800">Studio</span>
-        </div>
+        <h1 className="text-base font-bold text-slate-50 tracking-tight">Autoboxer</h1>
       </div>
 
       {/* Right side navigation pill container, exactly like oMLX Status/Models tabs but on the right */}
