@@ -41,7 +41,7 @@ export default function EditorPage() {
   });
 
   const handleSaveAndExit = useCallback(() => {
-    navigatingWithinEditor.current = false;
+    navigatingWithinEditor.current = true;
     navigate(`/projects/${pid}`);
     fetchProjectImages(pid);
     fetchStats(pid);
