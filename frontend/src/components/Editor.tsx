@@ -97,7 +97,7 @@ export default function Editor({
     zoom, panX, panY, isPanning, spaceHeld,
     isDrawing, drawStart, drawEnd,
     isDragging, resizeMode,
-    fillOpacity, autoAdvance, annotationFilter,
+    annotationFilter,
     renderedWidth, renderedHeight,
     contextMenu,
     dimensionTooltip,
@@ -105,12 +105,11 @@ export default function Editor({
 
   const {
     setSelectedAnnId, setCanvasMode, setActiveClass,
-    setFillOpacity, setAutoAdvance, setAnnotationFilter, setContextMenu,
+    setAnnotationFilter, setContextMenu,
     undo, redo,
     handleCanvasPointerDown, handleCanvasPointerMove, handleCanvasPointerUp,
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
-    handleCopyFromPrev,
     imageContainerRef, imageRef,
     setZoom, setPanX, setPanY, handleWheel,
   } = actions;
@@ -208,53 +207,11 @@ export default function Editor({
             <IconRedo />
           </button>
 
-          <div className="h-4 w-[1px] bg-slate-800" />
 
-          {/* Copy from previous */}
-          <button onClick={handleCopyFromPrev} disabled={currentImageIndex <= 0} title="Copy annotations from previous image"
-            className="p-2 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all">
-            <IconCopy />
-          </button>
-
-          <div className="h-4 w-[1px] bg-slate-800" />
-
-          {/* Zoom display */}
-          <span className="text-[10px] text-slate-500 font-mono px-1 min-w-[38px] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-
-          <div className="h-4 w-[1px] bg-slate-800" />
-
-          {/* Fill opacity */}
-          <div className="flex items-center gap-1.5 px-1">
-            <span className="text-[9px] text-slate-500 uppercase">Fill</span>
-            <input type="range" min={0} max={100} value={Math.round(fillOpacity * 100)}
-              onChange={e => setFillOpacity(Number(e.target.value) / 100)}
-              title={`Fill opacity: ${Math.round(fillOpacity * 100)}%`}
-              className="w-16 h-1 accent-indigo-500" />
-          </div>
-
-          <div className="h-4 w-[1px] bg-slate-800" />
-
-          {/* Auto-advance toggle */}
-          <button onClick={() => setAutoAdvance(!autoAdvance)}
-            title={`Auto-advance: ${autoAdvance ? 'ON' : 'OFF'}`}
-            className={`px-2 py-1.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
-              autoAdvance ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/40' : 'text-slate-500 hover:text-slate-300'
-            }`}>
-            AUTO
-          </button>
-
-          <div className="h-4 w-[1px] bg-slate-800" />
-
-          {/* Mode label */}
-          <span className="text-[10px] text-slate-500 px-1 font-mono">
-            {spaceHeld ? 'PAN' : isPanning ? 'PANNING' : canvasMode === 'draw' ? 'DRAW' : 'SELECT'}
-          </span>
         </div>
 
         {/* ── Zoom controls (top-right) ──────────────────────────────── */}
-        <div className="absolute top-4 right-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1 flex items-center gap-0.5 z-10 backdrop-blur shadow-2xl">
+        <div className="absolute top-4 right-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1.5 flex items-center gap-1.5 z-10 backdrop-blur shadow-2xl">
           <button onClick={() => {
             const container = imageContainerRef.current;
             if (!container) return;
@@ -267,11 +224,11 @@ export default function Editor({
             setPanY(cy - (cy - panY) * scale);
             setZoom(newZoom);
           }} title="Zoom In"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+            className="p-2 rounded-lg text-slate-400 hover:text-white transition-all">
             <IconZoomIn />
           </button>
           <button onClick={() => { setZoom(1); setPanX(0); setPanY(0); }} title="Reset Zoom (Cmd+0)"
-            className="px-1.5 py-1 rounded-lg text-[10px] text-slate-500 hover:text-white font-mono transition-all">
+            className="px-2 py-2 rounded-lg text-[10px] text-slate-500 hover:text-white font-mono transition-all">
             {Math.round(zoom * 100)}%
           </button>
           <button onClick={() => {
@@ -286,7 +243,7 @@ export default function Editor({
             setPanY(cy - (cy - panY) * scale);
             setZoom(newZoom);
           }} title="Zoom Out"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+            className="p-2 rounded-lg text-slate-400 hover:text-white transition-all">
             <IconZoomOut />
           </button>
         </div>
@@ -342,11 +299,10 @@ export default function Editor({
                   const isSelected = ann.id === selectedAnnId;
                   const boxColor = ann.color || '#34C759';
 
-                  // Compute fill color with opacity
                   const r = parseInt(boxColor.slice(1, 3), 16);
                   const g = parseInt(boxColor.slice(3, 5), 16);
                   const b = parseInt(boxColor.slice(5, 7), 16);
-                  const fillColor = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`;
+                  const fillColor = `rgba(${r}, ${g}, ${b}, 0.15)`;
 
                   return (
                     <div key={ann.id}

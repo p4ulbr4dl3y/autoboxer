@@ -35,8 +35,6 @@ export interface EditorState {
   resizeMode: ResizeMode;
 
   // UI toggles
-  fillOpacity: number; // 0..1
-  autoAdvance: boolean;
   annotationFilter: Set<string>; // class names to show, empty = all
 
   // Canvas sizing
@@ -55,8 +53,6 @@ export interface EditorActions {
   setSelectedAnnId: (id: number | string | null) => void;
   setCanvasMode: (mode: 'select' | 'draw') => void;
   setActiveClass: (name: string) => void;
-  setFillOpacity: (v: number) => void;
-  setAutoAdvance: (v: boolean) => void;
   setAnnotationFilter: (f: Set<string>) => void;
   setContextMenu: (c: { x: number; y: number; annId: number | string } | null) => void;
 
@@ -78,9 +74,6 @@ export interface EditorActions {
   handleSaveAnnotations: () => Promise<boolean>;
   handleNextImage: () => Promise<void>;
   handlePrevImage: () => Promise<void>;
-
-  // Copy from previous
-  handleCopyFromPrev: () => Promise<void>;
 
   // Refs (for external use)
   imageContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -366,8 +359,6 @@ export function useEditor(
   const lastPointerEventRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
   // ── UI toggles ──────────────────────────────────────────────────────────
-  const [fillOpacity, setFillOpacity] = useState(0.15);
-  const [autoAdvance, setAutoAdvance] = useState(false);
   const [annotationFilter, setAnnotationFilter] = useState<Set<string>>(new Set());
 
   // ── Context menu ────────────────────────────────────────────────────────
@@ -640,10 +631,7 @@ export function useEditor(
         setSelectedAnnId(tempId);
         setIsDirty(true);
 
-        // Auto-advance
-        if (autoAdvance && currentImageIndex < images.length - 1) {
-          setTimeout(() => handleNextImage(), 100);
-        }
+
       }
       setCanvasMode('select');
     }
@@ -658,7 +646,7 @@ export function useEditor(
     setIsDragging(false);
     draggedAnnIdRef.current = null;
   }, [isPanning, isDrawing, isDragging, currentImage, drawStart, drawEnd, renderedWidth, renderedHeight,
-      annotations, activeClass, classes, autoAdvance, currentImageIndex, images, handleNextImage,
+      annotations, activeClass, classes,
       pushHistory, setCanvasMode]);
 
   // ── Annotation CRUD ─────────────────────────────────────────────────────
@@ -699,31 +687,6 @@ export function useEditor(
     setSelectedAnnId(tempId);
     setIsDirty(true);
   }, [annotations, currentImage, pushHistory]);
-
-  // ── Copy from previous image ────────────────────────────────────────────
-  const handleCopyFromPrev = useCallback(async () => {
-    if (currentImageIndex <= 0) return;
-    const prevImageId = images[currentImageIndex - 1].id;
-    try {
-      const data = await api.annotations.get(prevImageId);
-      if (data.length === 0) return;
-      pushHistory(cloneAnnotations(annotations));
-      const mapped = data.map((ann: Annotation, i: number) => {
-        const cls = classes.find(c => c.name === ann.label);
-        return {
-          ...ann,
-          id: `copy_${Date.now()}_${i}` as string,
-          image_id: currentImageId,
-          box_id: annotations.length + i + 1,
-          color: cls ? cls.color : '#34C759',
-        };
-      });
-      setAnnotations(prev => [...prev, ...mapped]);
-      setIsDirty(true);
-    } catch (e) {
-      console.error('Copy from previous failed:', e);
-    }
-  }, [currentImageIndex, images, currentImageId, annotations, classes, pushHistory]);
 
   // ── Zoom with wheel ─────────────────────────────────────────────────────
   // Handler is exposed for use via onWheel in the component.
@@ -899,7 +862,7 @@ export function useEditor(
     zoom, panX, panY, isPanning, spaceHeld,
     isDrawing, drawStart, drawEnd,
     isDragging, resizeMode,
-    fillOpacity, autoAdvance, annotationFilter,
+    annotationFilter,
     renderedWidth, renderedHeight,
     contextMenu,
     dimensionTooltip,
@@ -907,12 +870,11 @@ export function useEditor(
 
   const actions: EditorActions = {
     setAnnotations, setSelectedAnnId, setCanvasMode, setActiveClass,
-    setFillOpacity, setAutoAdvance, setAnnotationFilter, setContextMenu,
+    setAnnotationFilter, setContextMenu,
     undo, redo,
     handleCanvasPointerDown, handleCanvasPointerMove, handleCanvasPointerUp,
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
-    handleCopyFromPrev,
     imageContainerRef, imageRef, updateRenderedDimensions,
     setZoom, setPanX, setPanY, handleWheel,
     setSpaceHeld,
