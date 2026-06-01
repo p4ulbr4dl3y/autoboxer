@@ -82,3 +82,9 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Custom dotted canvas background grid (Figma-style) */
+.canvas-grid {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle at 1px 1px, #262629 1px, transparent 0);
+}

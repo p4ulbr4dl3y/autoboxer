@@ -181,7 +181,7 @@ export default function Editor({
       </aside>
 
       {/* ── Center Canvas ────────────────────────────────────────────── */}
-      <section className="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      <section className="flex-1 bg-slate-955 flex flex-col items-center justify-center relative overflow-hidden canvas-grid">
 
         {/* ── Toolbar ────────────────────────────────────────────────── */}
         <div className="absolute top-4 left-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1.5 flex items-center gap-1.5 z-10 backdrop-blur shadow-2xl">
@@ -271,18 +271,21 @@ export default function Editor({
           onPointerDown={handleCanvasPointerDown}
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={handleCanvasPointerUp}
+          onDoubleClick={handleResetZoom}
           onWheel={handleWheel}
           onContextMenu={e => e.preventDefault()}
-          className={`relative border border-slate-800 shadow-2xl select-none touch-none overflow-hidden w-[85%] h-[85%] ${cursorClass}`}>
-          <div style={{
-            transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-            transformOrigin: '0 0',
-            width: `${renderedWidth}px`,
-            height: `${renderedHeight}px`,
-            position: 'absolute',
-            left: 0,
-            top: 0,
-          }}>
+          className={`relative w-full h-full select-none touch-none overflow-hidden bg-transparent ${cursorClass}`}>
+          <div
+            className="border border-slate-800 shadow-2xl rounded-md bg-slate-950/60 overflow-hidden"
+            style={{
+              transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+              transformOrigin: '0 0',
+              width: `${renderedWidth}px`,
+              height: `${renderedHeight}px`,
+              position: 'absolute',
+              left: 0,
+              top: 0,
+            }}>
             <img ref={imageRef} src={api.images.fileUrl(currentImageId)} alt=""
               style={{ width: '100%', height: '100%' }}
               className="block pointer-events-none" />
@@ -323,7 +326,7 @@ export default function Editor({
                         <div key={h.mode}
                           onPointerDown={e => handleStartResize(ann.id, h.mode, e)}
                           style={h.style}
-                          className={`absolute w-3 h-3 bg-white border border-slate-900 rounded-sm shadow z-30 ${h.className}`} />
+                          className={`absolute w-2.5 h-2.5 bg-white border-2 border-slate-800 rounded-full shadow-md z-30 transition-transform hover:scale-125 ${h.className}`} />
                       ))}
                     </div>
                   );
