@@ -85,6 +85,7 @@ export interface EditorActions {
   setPanX: (x: number | ((prev: number) => number)) => void;
   setPanY: (y: number | ((prev: number) => number)) => void;
   handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
+  handleResetZoom: () => void;
 
   // Space key tracking
   setSpaceHeld: (v: boolean) => void;
@@ -287,16 +288,16 @@ export function useEditor(
   }, []);
 
   // Track the container's own dimensions for clampPan
-  const containerDimRef = useRef({ width: 0, height: 0 });
+  const [containerDim, setContainerDim] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const container = imageContainerRef.current;
     if (!container) return;
     const sync = () => {
-      containerDimRef.current = {
+      setContainerDim({
         width: container.clientWidth,
         height: container.clientHeight,
-      };
+      });
     };
     sync();
     const ro = new ResizeObserver(sync);
@@ -310,24 +311,41 @@ export function useEditor(
    * - zoom < 1: image is centered (smaller than container).
    */
   const clampPan = useCallback((z: number, px: number, py: number): { x: number; y: number } => {
-    const cw = containerDimRef.current.width;
-    const ch = containerDimRef.current.height;
+    const cw = containerDim.width;
+    const ch = containerDim.height;
     if (cw === 0 || ch === 0) return { x: px, y: py };
 
     const imgW = renderedWidth * z;
     const imgH = renderedHeight * z;
 
     if (z >= 1) {
+      const minX = imgW >= cw ? cw - imgW : (cw - imgW) / 2;
+      const maxX = imgW >= cw ? 0 : (cw - imgW) / 2;
+      const minY = imgH >= ch ? ch - imgH : (ch - imgH) / 2;
+      const maxY = imgH >= ch ? 0 : (ch - imgH) / 2;
       return {
-        x: Math.min(0, Math.max(cw - imgW, px)),
-        y: Math.min(0, Math.max(ch - imgH, py)),
+        x: Math.min(maxX, Math.max(minX, px)),
+        y: Math.min(maxY, Math.max(minY, py)),
       };
     } else {
       const cx = (cw - imgW) / 2;
       const cy = (ch - imgH) / 2;
       return { x: cx, y: cy };
     }
-  }, [renderedWidth, renderedHeight]);
+  }, [renderedWidth, renderedHeight, containerDim]);
+
+  const handleResetZoom = useCallback(() => {
+    setZoom(1);
+    const cw = containerDim.width;
+    const ch = containerDim.height;
+    if (cw > 0 && ch > 0) {
+      setPanX((cw - renderedWidth) / 2);
+      setPanY((ch - renderedHeight) / 2);
+    } else {
+      setPanX(0);
+      setPanY(0);
+    }
+  }, [renderedWidth, renderedHeight, containerDim]);
 
   // Clamp pan after every zoom/pan change to keep the image in view
   useEffect(() => {
@@ -347,9 +365,28 @@ export function useEditor(
   if (currentImageId !== prevImageId) {
     setPrevImageId(currentImageId);
     setZoom(1);
-    setPanX(0);
-    setPanY(0);
     setIsPanning(false);
+
+    // Compute initial centered position immediately to avoid flicker
+    const cw = containerDim.width;
+    const ch = containerDim.height;
+    if (cw > 0 && ch > 0 && currentImage?.width && currentImage?.height) {
+      const containerAspect = cw / ch;
+      const imageAspect = currentImage.width / currentImage.height;
+      let w: number, h: number;
+      if (imageAspect > containerAspect) {
+        w = cw;
+        h = w / imageAspect;
+      } else {
+        h = ch;
+        w = h * imageAspect;
+      }
+      setPanX((cw - w) / 2);
+      setPanY((ch - h) / 2);
+    } else {
+      setPanX(0);
+      setPanY(0);
+    }
   }
 
   // ── Drawing state ───────────────────────────────────────────────────────
@@ -744,9 +781,7 @@ export function useEditor(
       // Reset zoom
       if ((e.metaKey || e.ctrlKey) && e.key === '0') {
         e.preventDefault();
-        setZoom(1);
-        setPanX(0);
-        setPanY(0);
+        handleResetZoom();
         return;
       }
 
@@ -797,7 +832,7 @@ export function useEditor(
     };
   }, [selectedAnnId, annotations, currentImageId, currentImageIndex, images, classes,
       undo, redo, handleDeleteAnnotation, handleNextImage, handlePrevImage,
-      handleSaveAnnotations, onSaveAndExit]);
+      handleSaveAnnotations, handleResetZoom, onSaveAndExit]);
 
   // ── Pinch-to-zoom (two-finger touch) ────────────────────────────────────
   const pinchRef = useRef({ dist: 0, zoom: 1, midX: 0, midY: 0 });
@@ -888,7 +923,7 @@ export function useEditor(
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     imageContainerRef, imageRef, updateRenderedDimensions,
-    setZoom, setPanX, setPanY, handleWheel,
+    setZoom, setPanX, setPanY, handleWheel, handleResetZoom,
     setSpaceHeld,
   };
 

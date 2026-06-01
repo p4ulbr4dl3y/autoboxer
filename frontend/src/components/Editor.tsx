@@ -111,7 +111,7 @@ export default function Editor({
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     imageContainerRef, imageRef,
-    setZoom, setPanX, setPanY, handleWheel,
+    setZoom, setPanX, setPanY, handleWheel, handleResetZoom,
   } = actions;
 
   // ── Derived state ─────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ export default function Editor({
             className="p-2 rounded-lg text-slate-400 hover:text-white transition-all">
             <IconZoomIn />
           </button>
-          <button onClick={() => { setZoom(1); setPanX(0); setPanY(0); }} title="Reset Zoom (Cmd+0)"
+          <button onClick={handleResetZoom} title="Reset Zoom (Cmd+0)"
             className="px-2 py-2 rounded-lg text-[10px] text-slate-500 hover:text-white font-mono transition-all">
             {Math.round(zoom * 100)}%
           </button>
@@ -277,14 +277,14 @@ export default function Editor({
           <div style={{
             transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
             transformOrigin: '0 0',
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            width: `${renderedWidth}px`,
+            height: `${renderedHeight}px`,
+            position: 'absolute',
+            left: 0,
+            top: 0,
           }}>
             <img ref={imageRef} src={api.images.fileUrl(currentImageId)} alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              style={{ width: '100%', height: '100%' }}
               className="block pointer-events-none" />
 
             {renderedWidth > 0 && renderedHeight > 0 && (
