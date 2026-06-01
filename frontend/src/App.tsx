@@ -1,13 +1,9 @@
 import { useState, useCallback, useRef } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import './App.css';
 import { useProjects, useProjectDetail } from './hooks/useProjects';
 import { api } from './api/client';
 import AppContext from './context/AppContext';
-import AppLayout from './layouts/AppLayout';
-import DashboardPage from './pages/DashboardPage';
-import ProjectGalleryPage from './pages/ProjectGalleryPage';
-import EditorPage from './pages/EditorPage';
 import ConfirmModal from './components/ConfirmModal';
 
 export default function App() {
@@ -32,8 +28,6 @@ export default function App() {
     try {
       await api.classes.delete(classId);
       setClasses(prev => prev.filter(c => c.id !== classId));
-      // We need to find the current project ID from the URL, but since we're
-      // in a callback, we'll just refresh projects list
       await fetchProjects();
     } catch (e: any) {
       setErrorModal({ title: 'Delete Class Failed', message: e.message });
@@ -41,7 +35,6 @@ export default function App() {
   }, [setClasses, fetchProjects]);
 
   const handleBatchLabel = useCallback(async () => {
-    // Get current project ID from the first image or classes
     const projectId = images.length > 0 ? images[0].project_id : classes.length > 0 ? classes[0].project_id : null;
     if (!projectId) return;
 
@@ -69,7 +62,6 @@ export default function App() {
 
       const pid = projectId;
       const poll = async () => {
-        // Stop polling if the user navigated to another project / the dashboard.
         if (currentProjectIdRef.current !== pid) {
           setIsBatchLabeling(false);
           return;
@@ -118,13 +110,7 @@ export default function App() {
 
   return (
     <AppContext.Provider value={contextValue}>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="projects/:projectId" element={<ProjectGalleryPage />} />
-          <Route path="projects/:projectId/images/:imageId" element={<EditorPage />} />
-        </Route>
-      </Routes>
+      <Outlet />
 
       {/* Global modals */}
       <ConfirmModal
