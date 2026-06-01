@@ -203,7 +203,7 @@ export default function ProjectGallery({
       <div className="space-y-6 lg:h-full lg:flex lg:flex-col min-h-0">
         {/* Uploader */}
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Upload Image Files</h3>
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Upload Image Files</h3>
           <div className="border border-dashed border-slate-800 hover:border-slate-700 rounded-xl p-6 text-center cursor-pointer transition-all relative group bg-slate-955/20">
             <input type="file" multiple accept="image/*" id="file-upload-input"
               onChange={e => setUploadFiles(e.target.files)}
@@ -224,10 +224,10 @@ export default function ProjectGallery({
         {/* Class Manager */}
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg lg:flex-1 lg:flex lg:flex-col min-h-0">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Label Classes ({classes.length})</h3>
-          <form onSubmit={handleAddClass} className="flex gap-2 mb-4">
+          <form onSubmit={handleAddClass} className="flex gap-2 mb-3">
             <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
               placeholder="New class..."
-              className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600 h-8" />
+              className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600 h-8 min-w-0" />
             <ColorPicker color={newClassColor} onChange={setNewClassColor} align="right" />
             <button type="submit" aria-label="Add class" title="Add class"
               className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 w-8 h-8 rounded-xl transition-all flex items-center justify-center p-0 flex-shrink-0">
@@ -239,30 +239,30 @@ export default function ProjectGallery({
           {classError && (
             <p className="text-red-400 text-[11px] mb-3 px-1">{classError}</p>
           )}
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[180px]">
+          <div className="flex-1 overflow-y-auto space-y-3 min-h-[180px]">
             {classes.length === 0 ? (
               <p className="text-slate-500 text-xs italic">No custom classes registered yet.</p>
             ) : (
               classes.map(cls => (
-                <div key={cls.id} className="bg-slate-950/40 border border-slate-850 p-2.5 rounded-xl space-y-1.5">
+                <div key={cls.id} className="bg-slate-955/40 border border-slate-850 p-3 rounded-xl space-y-2.5">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
-                    <span className="text-slate-300 font-mono font-bold text-xs truncate flex-1">{cls.name}</span>
+                    <span className="text-slate-350 font-mono font-bold text-xs truncate flex-1">{cls.name}</span>
                     <button onClick={() => onDeleteClass(cls.id)}
                       aria-label={`Delete class ${cls.name}`} title="Delete class"
                       className="text-slate-600 hover:text-red-400 p-1 rounded transition-colors flex-shrink-0">
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   </div>
-                  <div>
-                    <label className="block text-[8px] text-slate-500 uppercase tracking-wider mb-0.5">Locating Prompt</label>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider">Locating Prompt</label>
                     <input type="text" value={cls.prompt || `Locate ${cls.name}.`}
                       onChange={e => setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, prompt: e.target.value } : c))}
                       onBlur={e => handleUpdateClassPrompt(cls.id, e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-slate-700 transition-colors" />
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 text-xs text-slate-200 focus:outline-none focus:border-slate-700 transition-colors h-8" />
                   </div>
                 </div>
               ))
