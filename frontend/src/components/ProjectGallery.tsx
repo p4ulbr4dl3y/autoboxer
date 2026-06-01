@@ -200,7 +200,7 @@ export default function ProjectGallery({
       </div>
 
       {/* Sidebar */}
-      <div className="space-y-6">
+      <div className="space-y-6 lg:h-full lg:flex lg:flex-col min-h-0">
         {/* Uploader */}
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Upload Image Files</h3>
@@ -222,7 +222,7 @@ export default function ProjectGallery({
         </div>
 
         {/* Class Manager */}
-        <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg">
+        <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg lg:flex-1 lg:flex lg:flex-col min-h-0">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Label Classes ({classes.length})</h3>
           <form onSubmit={handleAddClass} className="flex gap-2 mb-4">
             <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
@@ -239,7 +239,7 @@ export default function ProjectGallery({
           {classError && (
             <p className="text-red-400 text-[11px] mb-3 px-1">{classError}</p>
           )}
-          <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[180px]">
             {classes.length === 0 ? (
               <p className="text-slate-500 text-xs italic">No custom classes registered yet.</p>
             ) : (
