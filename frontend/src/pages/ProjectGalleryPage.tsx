@@ -9,7 +9,7 @@ export default function ProjectGalleryPage() {
   const {
     projects, stats, images, classes,
     statusFilter, setStatusFilter, setClasses,
-    fetchProjectDetails, fetchStats,
+    fetchProjectDetails, fetchProjectImages, fetchStats,
     setDeleteClassInfo, setErrorModal,
     isBatchLabeling, handleBatchLabel,
   } = useAppContext();
@@ -23,6 +23,13 @@ export default function ProjectGalleryPage() {
       fetchStats(pid);
     }
   }, [pid, fetchProjectDetails, fetchStats]);
+
+  // Refetch images when status filter changes
+  useEffect(() => {
+    if (pid) {
+      fetchProjectImages(pid);
+    }
+  }, [statusFilter, pid, fetchProjectImages]);
 
   if (!project) return null;
 
