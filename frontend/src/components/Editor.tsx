@@ -153,7 +153,7 @@ export default function Editor({
 
 
   return (
-    <div className="flex-1 flex overflow-hidden h-[calc(100vh-69px)]">
+    <div className="flex-1 flex overflow-hidden h-[calc(100vh-69px)] select-none">
 
       {/* ── Left sidebar: Thumbnails ─────────────────────────────────── */}
       <aside className="w-48 border-r border-slate-850 bg-slate-950/60 flex flex-col flex-shrink-0">
@@ -181,7 +181,7 @@ export default function Editor({
       </aside>
 
       {/* ── Center Canvas ────────────────────────────────────────────── */}
-      <section className="flex-1 bg-slate-955 flex flex-col items-center justify-center relative overflow-hidden canvas-grid">
+      <section className="flex-1 bg-slate-955 flex flex-col items-center justify-center relative overflow-hidden canvas-grid select-none">
 
         {/* ── Toolbar ────────────────────────────────────────────────── */}
         <div className="absolute top-4 left-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1.5 flex items-center gap-1.5 z-10 backdrop-blur shadow-2xl">
@@ -355,7 +355,7 @@ export default function Editor({
             left: dimensionTooltip.x,
             top: dimensionTooltip.y,
             transform: 'translate(10px, 10px)',
-          }} className="bg-slate-900/95 border border-slate-700 text-slate-200 text-[10px] font-mono px-2 py-1 rounded-lg shadow-xl pointer-events-none z-50">
+          }} className="bg-slate-900/95 border border-slate-700 text-slate-200 text-[10px] font-mono px-2 py-1 rounded-lg shadow-xl pointer-events-none z-50 select-none">
             {dimensionTooltip.w} × {dimensionTooltip.h}px
           </div>
         )}
