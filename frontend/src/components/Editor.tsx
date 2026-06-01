@@ -405,7 +405,7 @@ export default function Editor({
       <aside className="w-80 border-l border-slate-850 bg-slate-900/40 backdrop-blur-md flex flex-col flex-shrink-0">
 
         {/* Active class selection */}
-        <div className="p-5 border-b border-slate-850 space-y-3">
+        <div className="p-5 border-b border-slate-850 space-y-4">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Drawing Class</h3>
           <div className="flex flex-wrap gap-2">
             {classes.map((cls, i) => (
@@ -423,11 +423,7 @@ export default function Editor({
             ))}
             {classes.length === 0 && <p className="text-slate-500 text-xs italic">No project classes defined.</p>}
           </div>
-        </div>
 
-        {/* AI Grounding Assistant */}
-        <div className="p-5 border-b border-slate-850 space-y-2.5">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">AI Assistant</h3>
           <button
             onClick={handleAutoLabelImage}
             disabled={isAiLabeling || classes.length === 0}
@@ -446,7 +442,7 @@ export default function Editor({
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Auto-Label with AI
+                Auto-label
               </>
             )}
           </button>

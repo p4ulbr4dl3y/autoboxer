@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { Project, ProjectStats, ClassCategory, ImageItem } from '../types';
+import BatchModal from './BatchModal';
 
 const DEFAULT_COLORS = ['#34C759', '#007AFF', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
 
@@ -14,7 +15,11 @@ interface ProjectGalleryProps {
   setStatusFilter: (f: string) => void;
   setClasses: React.Dispatch<React.SetStateAction<ClassCategory[]>>;
   onOpenEditor: (imageId: number) => void;
-  onBatchLabel: () => void;
+  onBatchLabel: (config: {
+    target_images: 'all' | 'unlabeled';
+    mode: 'merge' | 'overwrite';
+    target_classes: string[];
+  }) => void;
   onDeleteClass: (classId: number) => void;
   onRefresh: () => void;
   onError?: (title: string, message: string) => void;
@@ -30,6 +35,7 @@ export default function ProjectGallery({
   const [newClassColor, setNewClassColor] = useState('#34C759');
   const [classError, setClassError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
 
   // Automatically cycle default color for new class based on existing classes length
   useEffect(() => {
@@ -85,13 +91,13 @@ export default function ProjectGallery({
   const canExport = !!stats && stats.labeled_images > 0;
 
   const isRunning = isBatchLabeling || (stats && stats.batch_in_progress);
-  const unlabeledCount = stats ? stats.unlabeled_images : images.length;
-  const batchDisabled = isBatchLabeling || classes.length === 0 || unlabeledCount === 0;
+  const totalImages = stats ? stats.total_images : images.length;
+  const batchDisabled = isRunning || classes.length === 0 || totalImages === 0;
   const batchHint = classes.length === 0
     ? 'Add at least one class first'
-    : unlabeledCount === 0
-      ? 'All images are already labeled'
-      : `Run the model on ${unlabeledCount} unlabeled image${unlabeledCount === 1 ? '' : 's'}`;
+    : totalImages === 0
+      ? 'Upload some images first'
+      : 'Configure and run AI auto-labeling';
 
   return (
     <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 px-6 py-6 max-w-7xl mx-auto w-full">
@@ -265,14 +271,22 @@ export default function ProjectGallery({
           </div>
         </div>
 
-        <button onClick={onBatchLabel} disabled={batchDisabled} title={batchHint}
+        <button onClick={() => setIsBatchModalOpen(true)} disabled={batchDisabled} title={batchHint}
           className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-850 disabled:text-slate-500 disabled:border-slate-900 disabled:cursor-not-allowed text-slate-950 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 shadow-md">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          {isBatchLabeling ? 'Labeling…' : unlabeledCount > 0 && classes.length > 0 ? `Auto-Label ${unlabeledCount} Image${unlabeledCount === 1 ? '' : 's'}` : 'Auto-Label All Images'}
+          {isBatchLabeling ? 'Labeling…' : 'Auto-Label with AI'}
         </button>
       </div>
+
+      <BatchModal
+        isOpen={isBatchModalOpen}
+        classes={classes}
+        stats={stats}
+        onClose={() => setIsBatchModalOpen(false)}
+        onConfirm={onBatchLabel}
+      />
 
     </div>
   );

@@ -34,29 +34,23 @@ export default function App() {
     }
   }, [setClasses, fetchProjects]);
 
-  const handleBatchLabel = useCallback(async () => {
+  const handleBatchLabel = useCallback(async (config: {
+    target_images: 'all' | 'unlabeled';
+    mode: 'merge' | 'overwrite';
+    target_classes: string[];
+  }) => {
     const projectId = images.length > 0 ? images[0].project_id : classes.length > 0 ? classes[0].project_id : null;
     if (!projectId) return;
 
-    const s = stats[projectId];
-    const totalImages = s ? s.total_images : images.length;
-    if (totalImages === 0) {
-      setErrorModal({ title: 'No Images', message: 'Upload some images before running auto-labeling.' });
-      return;
-    }
-    if (classes.length === 0) {
-      setErrorModal({ title: 'No Classes Defined', message: 'Add at least one label class before running auto-labeling. The model needs classes to locate.' });
-      return;
-    }
-    if (s && s.unlabeled_images === 0) {
-      setErrorModal({ title: 'Nothing to Label', message: 'All images in this project are already labeled. Auto-labeling only runs on unlabeled images.' });
-      return;
-    }
     setIsBatchLabeling(true);
     currentProjectIdRef.current = projectId;
     try {
       await api.projects.batchAutoLabel(projectId, {
-        prompt: '', target_images: 'unlabeled', mode: 'merge', filter_by_classes: true, target_classes: [],
+        prompt: '',
+        target_images: config.target_images,
+        mode: config.mode,
+        filter_by_classes: true,
+        target_classes: config.target_classes,
       });
       await fetchStats(projectId);
 
@@ -86,7 +80,7 @@ export default function App() {
       setErrorModal({ title: 'Batch Labeling Failed', message: (e as Error).message });
       setIsBatchLabeling(false);
     }
-  }, [images, classes, stats, fetchStats, fetchProjectImages]);
+  }, [images, classes, fetchStats, fetchProjectImages]);
 
   const handleConfirmDeleteProject = useCallback(async () => {
     if (deleteProjectId === null) return;

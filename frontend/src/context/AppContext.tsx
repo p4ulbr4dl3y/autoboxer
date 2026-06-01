@@ -30,7 +30,11 @@ interface AppContextType {
 
   // Batch labeling
   isBatchLabeling: boolean;
-  handleBatchLabel: () => Promise<void>;
+  handleBatchLabel: (config: {
+    target_images: 'all' | 'unlabeled';
+    mode: 'merge' | 'overwrite';
+    target_classes: string[];
+  }) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
