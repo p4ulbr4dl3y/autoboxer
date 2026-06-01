@@ -135,17 +135,17 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
                         setProjectClasses(u);
                         setError(null);
                       }}
-                      className="w-full bg-slate-905 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-slate-700" />
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 text-xs text-slate-100 focus:outline-none focus:border-slate-700 h-8" />
                   </div>
                   <div className="flex-[2]">
                     <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Locate Prompt</label>
                     <input type="text" value={cls.prompt} placeholder="e.g. Locate cat."
                       onChange={e => { const u = [...projectClasses]; u[index].prompt = e.target.value; setProjectClasses(u); }}
-                      className="w-full bg-slate-905 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-slate-700" />
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 text-xs text-slate-100 focus:outline-none focus:border-slate-700 h-8" />
                   </div>
                   {projectClasses.length > 1 && (
                     <button type="button" onClick={() => removeClass(index)}
-                      className="bg-slate-850 hover:bg-red-955 text-slate-450 hover:text-red-400 p-2 rounded-xl border border-slate-800 hover:border-red-900/60 transition-colors">
+                      className="bg-slate-850 hover:bg-red-955 text-slate-450 hover:text-red-400 w-8 h-8 rounded-lg border border-slate-800 hover:border-red-900/60 transition-colors flex items-center justify-center p-0 flex-shrink-0">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>

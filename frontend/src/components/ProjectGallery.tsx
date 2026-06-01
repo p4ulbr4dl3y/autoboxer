@@ -227,10 +227,10 @@ export default function ProjectGallery({
           <form onSubmit={handleAddClass} className="flex gap-2 mb-4">
             <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
               placeholder="New class..."
-              className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600" />
+              className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600 h-8" />
             <ColorPicker color={newClassColor} onChange={setNewClassColor} align="right" />
             <button type="submit" aria-label="Add class" title="Add class"
-              className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 p-2.5 rounded-xl transition-all">
+              className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 w-8 h-8 rounded-xl transition-all flex items-center justify-center p-0 flex-shrink-0">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
@@ -271,7 +271,7 @@ export default function ProjectGallery({
         </div>
 
         <button onClick={() => setIsBatchModalOpen(true)} disabled={batchDisabled} title={batchHint}
-          className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-850 disabled:text-slate-500 disabled:border-slate-900 disabled:cursor-not-allowed text-slate-950 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 shadow-md">
+          className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-850 disabled:text-slate-500 disabled:border-slate-900 disabled:cursor-not-allowed text-slate-950 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 shadow-md">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
