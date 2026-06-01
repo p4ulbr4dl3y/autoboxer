@@ -91,14 +91,18 @@ export default function ProjectGallery({
       <div className="lg:col-span-3 bg-slate-900/30 border border-slate-850 rounded-2xl p-6 flex flex-col">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-slate-800/80 pb-5">
           <div>
-            <h2 className="text-2xl font-bold">{project.name}</h2>
-            <p className="text-slate-400 text-xs mt-1">Manage project images and trigger auto-annotations</p>
+            <h2 className="text-xl font-bold tracking-tight">{project.name}</h2>
+            <p className="text-slate-400 text-xs mt-0.5">Manage project images and trigger auto-annotations</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <div className="flex bg-slate-950 border border-slate-800 rounded-xl p-1 text-xs">
+            <div className="flex bg-slate-955 border border-slate-800 rounded-full p-1 text-xs">
               {['all', 'unlabeled', 'labeled'].map(filter => (
                 <button key={filter} onClick={() => setStatusFilter(filter)}
-                  className={`px-3 py-1.5 rounded-lg font-medium transition-all ${statusFilter === filter ? 'bg-slate-800 text-white shadow' : 'text-slate-400 hover:text-white'}`}>
+                  className={`px-4.5 py-1 rounded-full text-xs font-semibold tracking-wide transition-all duration-150 ${
+                    statusFilter === filter
+                      ? 'bg-slate-850 text-white border border-slate-750/80 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 border border-transparent'
+                  }`}>
                   {filter.charAt(0).toUpperCase() + filter.slice(1)}
                 </button>
               ))}
@@ -109,10 +113,10 @@ export default function ProjectGallery({
                 disabled={!canExport}
                 aria-haspopup="menu" aria-expanded={exportOpen}
                 title={canExport ? 'Export labeled dataset' : 'Label at least one image to enable export'}
-                className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/10 transition-all">
+                className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-750 disabled:bg-slate-900/60 disabled:text-slate-600 disabled:border-slate-850 disabled:cursor-not-allowed text-slate-200 hover:text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all duration-150">
                 Export Data
-                <svg className={`w-4 h-4 transition-transform ${exportOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <svg className={`w-3.5 h-3.5 transition-transform ${exportOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
               {exportOpen && (
@@ -120,9 +124,9 @@ export default function ProjectGallery({
                   <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
                   <div role="menu" className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-20 animate-fadeIn">
                     <button role="menuitem" onClick={() => handleExport('yolo')}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-800 text-slate-350 hover:text-white transition-colors">YOLO Dataset (ZIP)</button>
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-850 text-slate-350 hover:text-white transition-colors">YOLO Dataset (ZIP)</button>
                     <button role="menuitem" onClick={() => handleExport('coco')}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-800 border-t border-slate-850 text-slate-350 hover:text-white transition-colors">COCO JSON (ZIP)</button>
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-850 border-t border-slate-800 text-slate-350 hover:text-white transition-colors">COCO JSON (ZIP)</button>
                   </div>
                 </>
               )}
@@ -132,13 +136,13 @@ export default function ProjectGallery({
 
         {/* Progress bar */}
         {stats && isRunning && (
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-6 flex flex-col gap-2">
+          <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl mb-6 flex flex-col gap-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="font-semibold text-indigo-400 animate-pulse">Running Batch Auto-Labeling...</span>
-              <span className="font-mono text-slate-400">{stats.labeled_images} / {stats.total_images} Labeled</span>
+              <span className="font-semibold text-amber-400 animate-pulse">Running Batch Auto-Labeling...</span>
+              <span className="font-mono text-slate-450">{stats.labeled_images} / {stats.total_images} Labeled</span>
             </div>
-            <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-850">
-              <div className="bg-indigo-500 h-full rounded-full transition-all duration-500 animate-pulse"
+            <div className="w-full bg-slate-955 rounded-full h-1.5 overflow-hidden border border-slate-850">
+              <div className="bg-white h-full rounded-full transition-all duration-500 animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.4)]"
                 style={{ width: `${stats.total_images > 0 ? Math.round((stats.labeled_images / stats.total_images) * 100) : 0}%` }} />
             </div>
           </div>
@@ -149,28 +153,28 @@ export default function ProjectGallery({
           {images.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center py-20 text-center">
               <svg className="w-10 h-10 text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <p className="text-slate-400 font-medium text-sm">No images in this dataset yet</p>
+              <p className="text-slate-450 font-semibold text-sm">No images in this dataset yet</p>
               <p className="text-slate-500 text-xs mt-1">Upload images using the control panel on the right</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {images.map(img => (
                 <div key={img.id} onClick={() => onOpenEditor(img.id)}
-                  className="bg-slate-950/80 border border-slate-855 rounded-xl overflow-hidden hover:border-slate-700 group cursor-pointer relative transition-all duration-200">
-                  <div className="aspect-video w-full bg-slate-900 flex items-center justify-center overflow-hidden">
+                  className="bg-slate-950/40 border border-slate-850 rounded-xl overflow-hidden hover:border-slate-700/80 hover:shadow-lg hover:shadow-slate-950/20 group cursor-pointer relative transition-all duration-200">
+                  <div className="aspect-video w-full bg-slate-955 flex items-center justify-center overflow-hidden border-b border-slate-850">
                     <img src={api.images.fileUrl(img.id)} alt={img.filename} loading="lazy"
-                      className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                      className="object-cover w-full h-full group-hover:scale-102 transition-transform duration-300" />
                   </div>
                   <div className="p-3">
-                    <p className="text-slate-350 text-xs font-semibold truncate">{img.filename}</p>
-                    <div className="flex justify-between items-center mt-2">
+                    <p className="text-slate-350 text-xs font-semibold truncate group-hover:text-white transition-colors">{img.filename}</p>
+                    <div className="flex justify-between items-center mt-2.5">
                       <span className="text-[10px] font-mono text-slate-500">{img.width ? `${img.width}x${img.height}` : 'loading'}</span>
                       <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                         img.status === 'labeled' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                        img.status === 'in_progress' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse' :
-                        'bg-slate-800 text-slate-400 border border-slate-700'
+                        img.status === 'in_progress' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse' :
+                        'bg-slate-850 text-slate-450 border border-slate-800'
                       }`}>{img.status.replace('_', ' ')}</span>
                     </div>
                   </div>
@@ -184,38 +188,38 @@ export default function ProjectGallery({
       {/* Sidebar */}
       <div className="space-y-6">
         {/* Uploader */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Upload Image Files</h3>
-          <div className="border-2 border-dashed border-slate-800 hover:border-indigo-500/50 rounded-xl p-6 text-center cursor-pointer transition-all relative group bg-slate-950/40">
+        <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Upload Image Files</h3>
+          <div className="border border-dashed border-slate-800 hover:border-slate-700 rounded-xl p-6 text-center cursor-pointer transition-all relative group bg-slate-955/20">
             <input type="file" multiple accept="image/*" id="file-upload-input"
               onChange={e => setUploadFiles(e.target.files)}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-            <svg className="w-8 h-8 mx-auto text-slate-500 mb-2 group-hover:text-indigo-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            <svg className="w-8 h-8 mx-auto text-slate-500 mb-2 group-hover:text-slate-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
-            <p className="text-xs text-slate-350 font-semibold truncate">{uploadFiles ? `${uploadFiles.length} files selected` : 'Drag files here or Browse'}</p>
+            <p className="text-xs text-slate-400 font-medium truncate">{uploadFiles ? `${uploadFiles.length} files selected` : 'Drag files here or Browse'}</p>
           </div>
           {uploadFiles && (
             <button onClick={handleUploadImages} disabled={isUploading}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-xl mt-4 shadow-lg shadow-indigo-500/10 active:scale-95 transition-all duration-200">
+              className="w-full bg-white hover:bg-slate-200 active:scale-95 text-slate-950 text-xs font-bold py-2.5 rounded-xl mt-4 shadow-md transition-all duration-150">
               {isUploading ? 'Uploading...' : 'Confirm Upload'}
             </button>
           )}
         </div>
 
         {/* Class Manager */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-          <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-3">Label Classes ({classes.length})</h3>
+        <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Label Classes ({classes.length})</h3>
           <form onSubmit={handleAddClass} className="flex gap-2 mb-4">
             <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
-              placeholder="New class name..."
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500" />
+              placeholder="New class..."
+              className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600" />
             <input type="color" value={newClassColor} onChange={e => setNewClassColor(e.target.value)}
               className="w-8 h-8 rounded-lg overflow-hidden border border-slate-800 bg-transparent cursor-pointer p-0" />
             <button type="submit" aria-label="Add class" title="Add class"
-              className="bg-slate-800 hover:bg-indigo-600 border border-slate-750 hover:border-transparent text-white p-2 rounded-xl transition-all">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 p-2.5 rounded-xl transition-all">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
             </button>
           </form>
@@ -227,14 +231,14 @@ export default function ProjectGallery({
               <p className="text-slate-500 text-xs italic">No custom classes registered yet.</p>
             ) : (
               classes.map(cls => (
-                <div key={cls.id} className="bg-slate-950/60 border border-slate-850 p-2.5 rounded-xl space-y-1.5">
+                <div key={cls.id} className="bg-slate-950/40 border border-slate-850 p-2.5 rounded-xl space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
-                    <span className="text-slate-300 font-mono font-bold truncate flex-1">{cls.name}</span>
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
+                    <span className="text-slate-300 font-mono font-bold text-xs truncate flex-1">{cls.name}</span>
                     <button onClick={() => onDeleteClass(cls.id)}
                       aria-label={`Delete class ${cls.name}`} title="Delete class"
                       className="text-slate-600 hover:text-red-400 p-1 rounded transition-colors flex-shrink-0">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
@@ -245,7 +249,7 @@ export default function ProjectGallery({
                       onChange={e => setClasses(prev => prev.map(c => c.id === cls.id ? { ...c, prompt: e.target.value } : c))}
                       onBlur={e => handleUpdateClassPrompt(cls.id, e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors" />
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-slate-700 transition-colors" />
                   </div>
                 </div>
               ))
@@ -254,7 +258,7 @@ export default function ProjectGallery({
         </div>
 
         <button onClick={onBatchLabel} disabled={batchDisabled} title={batchHint}
-          className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all">
+          className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-850 disabled:text-slate-500 disabled:border-slate-900 disabled:cursor-not-allowed text-slate-950 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all duration-150 active:scale-95 shadow-md">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>

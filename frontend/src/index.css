@@ -10,14 +10,43 @@
  * transitions silently missing.
  */
 @theme {
+  /* Font Families */
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Redefine default slate palette to oMLX-inspired matte charcoal / carbon colors */
+  --color-slate-50: #fbfbfb;
+  --color-slate-100: #f2f2f3;
+  --color-slate-200: #e2e2e4;
+  --color-slate-300: #cdcdcf;
+  --color-slate-400: #93939a;
+  --color-slate-500: #6f6f76;
+  --color-slate-600: #4e4e54;
+  --color-slate-700: #3c3c42;
+  --color-slate-800: #262629;
+  --color-slate-900: #141416;
+  --color-slate-950: #0e0e10;
+
   /* Interpolated slate shades used across panels, borders and text. */
-  --color-slate-350: #aebccf;
-  --color-slate-450: #7c8ba1;
-  --color-slate-550: #55647a;
-  --color-slate-750: #283548;
-  --color-slate-850: #162032;
-  --color-slate-855: #131c2d;
-  --color-slate-955: #080e1c;
+  --color-slate-350: #afafb5;
+  --color-slate-450: #7f7f86;
+  --color-slate-550: #5d5d64;
+  --color-slate-750: #2a2a2e;
+  --color-slate-855: #161619;
+  --color-slate-850: #1c1c1f;
+  --color-slate-955: #0b0b0d;
+
+  /* Redefine indigo palette to a sleek, cool slate/silver/monochrome theme */
+  --color-indigo-50: #fafafa;
+  --color-indigo-100: #f4f4f5;
+  --color-indigo-200: #e4e4e7;
+  --color-indigo-300: #d4d4d8;
+  --color-indigo-400: #a1a1aa;
+  --color-indigo-500: #71717a;
+  --color-indigo-600: #27272a;
+  --color-indigo-700: #18181b;
+  --color-indigo-800: #141416;
+  --color-indigo-900: #0f0f11;
+  --color-indigo-950: #09090b;
 
   /* Modal / overlay entrance animations. */
   --animate-fadeIn: fadeIn 0.15s ease-out;

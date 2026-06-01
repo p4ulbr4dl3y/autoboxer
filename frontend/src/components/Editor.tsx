@@ -165,10 +165,10 @@ export default function Editor({
           {images.map(img => (
             <div key={img.id}
               onClick={async () => { const saved = await handleSaveAnnotations(); if (saved) { onDirtyChange?.(false); onBeforeNavigate?.(); onImageChange(img.id); } }}
-              className={`p-1.5 rounded-lg border cursor-pointer hover:border-slate-700 transition-all ${
-                img.id === currentImageId ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-855 bg-slate-900/30'
+              className={`p-1.5 rounded-lg border cursor-pointer transition-all ${
+                img.id === currentImageId ? 'border-white bg-white/5 shadow-sm' : 'border-slate-850 bg-slate-900/30 hover:border-slate-750'
               }`}>
-              <div className="aspect-video w-full rounded overflow-hidden bg-slate-950">
+              <div className="aspect-video w-full rounded overflow-hidden bg-slate-955">
                 <img src={api.images.fileUrl(img.id)} className="object-cover w-full h-full" alt="" />
               </div>
               <div className="flex items-center justify-between mt-1 px-1">
@@ -187,11 +187,11 @@ export default function Editor({
         <div className="absolute top-4 left-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1.5 flex items-center gap-1.5 z-10 backdrop-blur shadow-2xl">
           {/* Select / Draw mode */}
           <button onClick={() => setCanvasMode('select')} title="Select Mode (S)"
-            className={`p-2 rounded-lg transition-all ${canvasMode === 'select' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+            className={`p-2 rounded-lg transition-all ${canvasMode === 'select' ? 'bg-slate-850 text-white border border-slate-750/80 shadow-sm' : 'text-slate-400 hover:text-slate-200 border border-transparent'}`}>
             <IconCursor />
           </button>
           <button onClick={() => setCanvasMode('draw')} title="Draw Bounding Box (D)"
-            className={`p-2 rounded-lg transition-all ${canvasMode === 'draw' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+            className={`p-2 rounded-lg transition-all ${canvasMode === 'draw' ? 'bg-slate-850 text-white border border-slate-750/80 shadow-sm' : 'text-slate-400 hover:text-slate-200 border border-transparent'}`}>
             <IconDraw />
           </button>
 
@@ -336,7 +336,7 @@ export default function Editor({
                     top: `${Math.min(drawStart.y, drawEnd.y)}px`,
                     width: `${Math.abs(drawEnd.x - drawStart.x)}px`,
                     height: `${Math.abs(drawEnd.y - drawStart.y)}px`,
-                  }} className="absolute border-2 border-dashed border-indigo-400 bg-indigo-500/10 pointer-events-none" />
+                  }} className="absolute border border-dashed border-white bg-white/10 pointer-events-none" />
                 )}
               </div>
             )}
@@ -404,9 +404,9 @@ export default function Editor({
             {classes.map((cls, i) => (
               <button key={cls.id} onClick={() => setActiveClass(cls.name)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border ${
-                  activeClass === cls.name ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
+                  activeClass === cls.name ? 'bg-slate-850 border border-slate-750 text-white shadow-sm' : 'bg-slate-955 border-slate-800 text-slate-450 hover:border-slate-700 hover:text-slate-200'
                 }`}>
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
                 {cls.name}
                 {/* Hotkey badge */}
                 {i < 9 && (
@@ -428,8 +428,8 @@ export default function Editor({
             {uniqueClassNames.length > 1 && (
               <div className="flex flex-wrap gap-1">
                 <button onClick={() => setAnnotationFilter(new Set())}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
-                    annotationFilter.size === 0 ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-500 hover:text-slate-300 border border-slate-800'
+                  className={`px-2.5 py-0.5 rounded text-[10px] font-mono transition-all ${
+                    annotationFilter.size === 0 ? 'bg-slate-850 text-slate-200 border border-slate-750' : 'text-slate-500 hover:text-slate-350 border border-slate-800'
                   }`}>
                   All
                 </button>
@@ -440,8 +440,8 @@ export default function Editor({
                       if (next.has(name)) next.delete(name); else next.add(name);
                       setAnnotationFilter(next);
                     }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
-                      annotationFilter.has(name) ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-500 hover:text-slate-300 border border-slate-800'
+                    className={`px-2.5 py-0.5 rounded text-[10px] font-mono transition-all ${
+                      annotationFilter.has(name) ? 'bg-slate-850 text-slate-200 border border-slate-750' : 'text-slate-500 hover:text-slate-350 border border-slate-800'
                     }`}>
                     {name}
                   </button>
@@ -460,15 +460,15 @@ export default function Editor({
               return (
                 <div key={ann.id} onClick={() => setSelectedAnnId(ann.id)}
                   className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                    isSelected ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-855 bg-slate-955/20 hover:border-slate-800'
+                    isSelected ? 'border-slate-500 bg-slate-850/50 shadow-sm' : 'border-slate-850 bg-slate-955/20 hover:border-slate-800'
                   }`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: ann.color }} />
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: ann.color }} />
                       {isSelected ? (
                         <select value={ann.label || ''} onChange={e => handleChangeSelectedClass(e.target.value)}
-                          onClick={e => e.stopPropagation()}
-                          className="bg-slate-950 border border-slate-800 rounded-md px-1.5 py-0.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-indigo-500">
+                           onClick={e => e.stopPropagation()}
+                          className="bg-slate-950 border border-slate-800 rounded-md px-1.5 py-0.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-slate-700">
                           {classes.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                           {!classes.some(c => c.name === ann.label) && ann.label && <option value={ann.label}>{ann.label}</option>}
                         </select>
@@ -506,12 +506,12 @@ export default function Editor({
           </button>
           {currentImageIndex < images.length - 1 ? (
             <button onClick={handleNextImage}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-500/10 active:scale-95 transition-all">
+              className="w-full bg-white hover:bg-slate-200 active:scale-95 text-slate-950 font-bold py-2.5 rounded-xl text-xs shadow-md transition-all">
               Save & Next (Enter)
             </button>
           ) : (
             <button onClick={async () => { const saved = await handleSaveAnnotations(); if (saved) onSaveAndExit(); }}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-500/10 active:scale-95 transition-all">
+              className="w-full bg-white hover:bg-slate-200 active:scale-95 text-slate-950 font-bold py-2.5 rounded-xl text-xs shadow-md transition-all">
               Save & Finish
             </button>
           )}
