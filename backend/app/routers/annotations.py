@@ -26,7 +26,7 @@ def update_image_annotations(
 ):
     """
     Overwrites the saved annotations for an image with the provided list.
-    Sets the image status to 'labeled'.
+    Marks the image 'labeled' when boxes remain, otherwise 'unlabeled'.
     """
     db_image = db.query(ImageModel).filter(ImageModel.id == image_id).first()
     if not db_image:
@@ -50,7 +50,7 @@ def update_image_annotations(
         db.add(db_ann)
         new_annotations.append(db_ann)
 
-    db_image.status = "labeled"
+    db_image.status = "labeled" if new_annotations else "unlabeled"
     db.commit()
 
     for ann in new_annotations:

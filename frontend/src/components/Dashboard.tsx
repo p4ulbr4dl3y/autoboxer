@@ -43,11 +43,15 @@ export default function Dashboard({ projects, stats, onOpenProject, onDeleteProj
                 : 0;
               return (
                 <div key={proj.id}
-                  className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-700 hover:shadow-xl hover:shadow-slate-950/40 hover:-translate-y-0.5 group transition-all duration-300">
+                  onClick={() => onOpenProject(proj.id)}
+                  role="button" tabIndex={0}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenProject(proj.id); } }}
+                  className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between hover:border-slate-700 hover:shadow-xl hover:shadow-slate-950/40 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer group transition-all duration-300">
                   <div>
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-bold text-lg text-slate-100 group-hover:text-indigo-400 transition-colors duration-200">{proj.name}</h3>
                       <button onClick={e => { e.stopPropagation(); onDeleteProject(proj.id); }}
+                        aria-label={`Delete project ${proj.name}`} title="Delete project"
                         className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800/80 transition-all">
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

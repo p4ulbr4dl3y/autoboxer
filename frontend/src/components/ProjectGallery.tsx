@@ -26,6 +26,7 @@ export default function ProjectGallery({
   const [newClassName, setNewClassName] = useState('');
   const [newClassColor, setNewClassColor] = useState('#34C759');
   const [classError, setClassError] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const handleUploadImages = async () => {
     if (!uploadFiles) return;
@@ -66,10 +67,20 @@ export default function ProjectGallery({
   };
 
   const handleExport = (format: 'yolo' | 'coco') => {
+    setExportOpen(false);
     window.open(api.projects.exportUrl(project.id, format));
   };
 
+  const canExport = !!stats && stats.labeled_images > 0;
+
   const isRunning = isBatchLabeling || (stats && stats.batch_in_progress);
+  const unlabeledCount = stats ? stats.unlabeled_images : images.length;
+  const batchDisabled = isBatchLabeling || classes.length === 0 || unlabeledCount === 0;
+  const batchHint = classes.length === 0
+    ? 'Add at least one class first'
+    : unlabeledCount === 0
+      ? 'All images are already labeled'
+      : `Run the model on ${unlabeledCount} unlabeled image${unlabeledCount === 1 ? '' : 's'}`;
 
   return (
     <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 px-6 py-6 max-w-7xl mx-auto w-full">
@@ -89,19 +100,29 @@ export default function ProjectGallery({
                 </button>
               ))}
             </div>
-            <div className="relative group">
-              <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/10 transition-all">
+            <div className="relative">
+              <button
+                onClick={() => canExport && setExportOpen(o => !o)}
+                disabled={!canExport}
+                aria-haspopup="menu" aria-expanded={exportOpen}
+                title={canExport ? 'Export labeled dataset' : 'Label at least one image to enable export'}
+                className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-indigo-500/10 transition-all">
                 Export Data
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className={`w-4 h-4 transition-transform ${exportOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <div className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden hidden group-hover:block z-20">
-                <button onClick={() => handleExport('yolo')}
-                  className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-800 text-slate-350 hover:text-white transition-colors">YOLO Dataset (ZIP)</button>
-                <button onClick={() => handleExport('coco')}
-                  className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-800 border-t border-slate-850 text-slate-350 hover:text-white transition-colors">COCO JSON (ZIP)</button>
-              </div>
+              {exportOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                  <div role="menu" className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-20 animate-fadeIn">
+                    <button role="menuitem" onClick={() => handleExport('yolo')}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-800 text-slate-350 hover:text-white transition-colors">YOLO Dataset (ZIP)</button>
+                    <button role="menuitem" onClick={() => handleExport('coco')}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-800 border-t border-slate-850 text-slate-350 hover:text-white transition-colors">COCO JSON (ZIP)</button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -115,7 +136,7 @@ export default function ProjectGallery({
             </div>
             <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-850">
               <div className="bg-indigo-500 h-full rounded-full transition-all duration-500 animate-pulse"
-                style={{ width: `${Math.round((stats.labeled_images / stats.total_images) * 100)}%` }} />
+                style={{ width: `${stats.total_images > 0 ? Math.round((stats.labeled_images / stats.total_images) * 100) : 0}%` }} />
             </div>
           </div>
         )}
@@ -188,7 +209,7 @@ export default function ProjectGallery({
               className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500" />
             <input type="color" value={newClassColor} onChange={e => setNewClassColor(e.target.value)}
               className="w-8 h-8 rounded-lg overflow-hidden border border-slate-800 bg-transparent cursor-pointer p-0" />
-            <button type="submit"
+            <button type="submit" aria-label="Add class" title="Add class"
               className="bg-slate-800 hover:bg-indigo-600 border border-slate-750 hover:border-transparent text-white p-2 rounded-xl transition-all">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -208,6 +229,7 @@ export default function ProjectGallery({
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
                     <span className="text-slate-300 font-mono font-bold truncate flex-1">{cls.name}</span>
                     <button onClick={() => onDeleteClass(cls.id)}
+                      aria-label={`Delete class ${cls.name}`} title="Delete class"
                       className="text-slate-600 hover:text-red-400 p-1 rounded transition-colors flex-shrink-0">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -228,12 +250,12 @@ export default function ProjectGallery({
           </div>
         </div>
 
-        <button onClick={onBatchLabel} disabled={isBatchLabeling}
-          className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all">
+        <button onClick={onBatchLabel} disabled={batchDisabled} title={batchHint}
+          className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          Auto-Label All Images
+          {isBatchLabeling ? 'Labeling…' : unlabeledCount > 0 && classes.length > 0 ? `Auto-Label ${unlabeledCount} Image${unlabeledCount === 1 ? '' : 's'}` : 'Auto-Label All Images'}
         </button>
       </div>
 

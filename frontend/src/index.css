@@ -1,1 +1,55 @@
 @import "tailwindcss";
+
+/*
+ * Custom design tokens.
+ *
+ * The UI relies on a handful of intermediate slate shades and a fade/scale
+ * animation that are not part of Tailwind's default scale. Without these
+ * definitions the corresponding utilities (e.g. `border-slate-850`,
+ * `animate-fadeIn`) emit no CSS, leaving borders, panel backgrounds and modal
+ * transitions silently missing.
+ */
+@theme {
+  /* Interpolated slate shades used across panels, borders and text. */
+  --color-slate-350: #aebccf;
+  --color-slate-450: #7c8ba1;
+  --color-slate-550: #55647a;
+  --color-slate-750: #283548;
+  --color-slate-850: #162032;
+  --color-slate-855: #131c2d;
+  --color-slate-955: #080e1c;
+
+  /* Modal / overlay entrance animations. */
+  --animate-fadeIn: fadeIn 0.15s ease-out;
+  --animate-scaleIn: scaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

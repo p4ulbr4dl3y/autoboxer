@@ -56,8 +56,18 @@ export default function App() {
 
   const handleBatchLabel = useCallback(async () => {
     if (!selectedProjectId) return;
-    if (images.length === 0) {
+    const s = stats[selectedProjectId];
+    const totalImages = s ? s.total_images : images.length;
+    if (totalImages === 0) {
       setErrorModal({ title: 'No Images', message: 'Upload some images before running auto-labeling.' });
+      return;
+    }
+    if (classes.length === 0) {
+      setErrorModal({ title: 'No Classes Defined', message: 'Add at least one label class before running auto-labeling. The model needs classes to locate.' });
+      return;
+    }
+    if (s && s.unlabeled_images === 0) {
+      setErrorModal({ title: 'Nothing to Label', message: 'All images in this project are already labeled. Auto-labeling only runs on unlabeled images.' });
       return;
     }
     setIsBatchLabeling(true);
@@ -87,7 +97,7 @@ export default function App() {
       setErrorModal({ title: 'Batch Labeling Failed', message: e.message });
       setIsBatchLabeling(false);
     }
-  }, [selectedProjectId, images.length, fetchStats, fetchProjectImages]);
+  }, [selectedProjectId, images.length, classes.length, stats, fetchStats, fetchProjectImages]);
 
   const handleConfirmDeleteProject = useCallback(async () => {
     if (deleteProjectId === null) return;
@@ -156,6 +166,7 @@ export default function App() {
             onSaveAndExit={handleSaveAndExit}
             onImageChange={setCurrentImageId}
             setImages={setImages}
+            onError={(title, message) => setErrorModal({ title, message })}
           />
         )}
       </main>

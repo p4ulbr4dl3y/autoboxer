@@ -9,10 +9,11 @@ interface EditorProps {
   onSaveAndExit: () => void;
   onImageChange: (imageId: number) => void;
   setImages: React.Dispatch<React.SetStateAction<ImageItem[]>>;
+  onError?: (title: string, message: string) => void;
 }
 
 export default function Editor({
-  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages,
+  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError,
 }: EditorProps) {
   const currentImage = images.find(img => img.id === currentImageId);
   const currentImageIndex = images.findIndex(img => img.id === currentImageId);
@@ -79,13 +80,15 @@ export default function Editor({
         label: ann.label,
       }));
       await api.annotations.update(currentImageId, cleaned);
-      setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: 'labeled' } : img));
+      const newStatus = cleaned.length > 0 ? 'labeled' : 'unlabeled';
+      setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: newStatus } : img));
       return true;
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      onError?.('Save Failed', e?.message || 'Could not save annotations. Please try again.');
       return false;
     }
-  }, [annotations, currentImageId, setImages]);
+  }, [annotations, currentImageId, setImages, onError]);
 
   // Navigation
   const handleNextImage = async () => {
@@ -110,10 +113,18 @@ export default function Editor({
     }
   };
 
+  // Keep the overlay aligned to the rendered image on any layout change
+  // (window resize, sidebar reflow, image swap), not just window resizes.
   useEffect(() => {
-    window.addEventListener('resize', updateRenderedDimensions);
-    return () => window.removeEventListener('resize', updateRenderedDimensions);
-  }, []);
+    const el = imageRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateRenderedDimensions);
+      return () => window.removeEventListener('resize', updateRenderedDimensions);
+    }
+    const observer = new ResizeObserver(() => updateRenderedDimensions());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [currentImageId]);
 
   // Canvas helpers
   const getCanvasMouseCoords = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -312,7 +323,7 @@ export default function Editor({
 
         {/* Navigation arrows */}
         <div className="absolute left-6 inset-y-0 flex items-center pointer-events-none">
-          <button onClick={handlePrevImage} disabled={currentImageIndex === 0}
+          <button onClick={handlePrevImage} disabled={currentImageIndex === 0} aria-label="Previous image" title="Previous image (←)"
             className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-855 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -320,7 +331,7 @@ export default function Editor({
           </button>
         </div>
         <div className="absolute right-6 inset-y-0 flex items-center pointer-events-none">
-          <button onClick={handleNextImage} disabled={currentImageIndex === images.length - 1}
+          <button onClick={handleNextImage} disabled={currentImageIndex === images.length - 1} aria-label="Next image" title="Next image (→)"
             className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-855 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -434,6 +445,7 @@ export default function Editor({
                       )}
                     </div>
                     <button onClick={e => { e.stopPropagation(); handleDeleteAnnotation(ann.id); }}
+                      aria-label={`Delete ${ann.label || 'annotation'}`} title="Delete annotation"
                       className="text-slate-500 hover:text-red-400 p-1 rounded transition-colors">
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
