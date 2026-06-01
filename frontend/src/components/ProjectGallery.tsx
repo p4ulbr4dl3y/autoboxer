@@ -142,9 +142,9 @@ export default function ProjectGallery({
                   <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
                   <div role="menu" className="absolute right-0 mt-2 w-40 bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden z-20 animate-fadeIn">
                     <button role="menuitem" onClick={() => handleExport('yolo')}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-850 text-slate-350 hover:text-white transition-colors">YOLO Dataset (ZIP)</button>
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-850 text-slate-350 hover:text-white transition-colors">YOLO Dataset</button>
                     <button role="menuitem" onClick={() => handleExport('coco')}
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-850 border-t border-slate-800 text-slate-350 hover:text-white transition-colors">COCO JSON (ZIP)</button>
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:bg-slate-850 border-t border-slate-800 text-slate-350 hover:text-white transition-colors">COCO JSON</button>
                   </div>
                 </>
               )}
