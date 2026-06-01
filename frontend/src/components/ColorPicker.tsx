@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 interface ColorPickerProps {
   color: string;
   onChange: (color: string) => void;
+  align?: 'left' | 'right';
 }
 
 const PRESET_COLORS = [
@@ -18,7 +19,7 @@ const PRESET_COLORS = [
   '#C6A48F', // Sand
 ];
 
-export default function ColorPicker({ color, onChange }: ColorPickerProps) {
+export default function ColorPicker({ color, onChange, align = 'left' }: ColorPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +50,7 @@ export default function ColorPicker({ color, onChange }: ColorPickerProps) {
 
       {/* Popover */}
       {isOpen && (
-        <div className="absolute left-0 mt-2 p-3 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-30 animate-fadeIn w-48">
+        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 p-3 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-30 animate-fadeIn w-48`}>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Select Color</p>
           <div className="grid grid-cols-5 gap-2">
             {PRESET_COLORS.map(c => (

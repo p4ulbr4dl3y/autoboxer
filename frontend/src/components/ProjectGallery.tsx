@@ -228,7 +228,7 @@ export default function ProjectGallery({
             <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
               placeholder="New class..."
               className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600" />
-            <ColorPicker color={newClassColor} onChange={setNewClassColor} />
+            <ColorPicker color={newClassColor} onChange={setNewClassColor} align="right" />
             <button type="submit" aria-label="Add class" title="Add class"
               className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 p-2.5 rounded-xl transition-all">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
