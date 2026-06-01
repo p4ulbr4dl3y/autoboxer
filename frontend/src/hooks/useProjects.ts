@@ -52,9 +52,9 @@ export function useProjectDetail(projectId: number | null) {
     }
   }, []);
 
-  const fetchProjectImages = useCallback(async (pid: number) => {
+  const fetchProjectImages = useCallback(async (pid: number, filter?: string) => {
     try {
-      const data = await api.images.list(pid, statusFilter);
+      const data = await api.images.list(pid, filter ?? statusFilter);
       setImages(data);
     } catch (e) {
       console.error(e);

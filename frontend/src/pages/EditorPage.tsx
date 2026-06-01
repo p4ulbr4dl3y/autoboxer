@@ -18,13 +18,14 @@ export default function EditorPage() {
 
   const [editorDirty, setEditorDirty] = useState(false);
 
-  // Load project details on mount
+  // Load project details and ALL images on mount (ignore gallery filter)
   useEffect(() => {
     if (pid) {
       fetchProjectDetails(pid);
+      fetchProjectImages(pid, 'all');
       fetchStats(pid);
     }
-  }, [pid, fetchProjectDetails, fetchStats]);
+  }, [pid, fetchProjectDetails, fetchProjectImages, fetchStats]);
 
   // Block router navigation when editor is dirty
   const blocker = useBlocker(editorDirty);

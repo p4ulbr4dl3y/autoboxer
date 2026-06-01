@@ -17,7 +17,7 @@ interface AppContextType {
   statusFilter: string;
   setStatusFilter: (f: string) => void;
   fetchProjectDetails: (id: number) => Promise<void>;
-  fetchProjectImages: (id: number) => Promise<void>;
+  fetchProjectImages: (id: number, filter?: string) => Promise<void>;
 
   // Modals
   deleteProjectId: number | null;
