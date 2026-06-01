@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { Project, ProjectStats, ClassCategory, ImageItem } from '../types';
 import BatchModal from './BatchModal';
+import ColorPicker from './ColorPicker';
 
 const DEFAULT_COLORS = ['#34C759', '#007AFF', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
 
@@ -106,7 +107,6 @@ export default function ProjectGallery({
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-slate-800/80 pb-5">
           <div>
             <h2 className="text-xl font-bold tracking-tight">{project.name}</h2>
-            <p className="text-slate-400 text-xs mt-0.5">Manage project images and trigger auto-annotations</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <div className="flex bg-slate-955 border border-slate-800 rounded-full p-1 text-xs">
@@ -228,8 +228,7 @@ export default function ProjectGallery({
             <input type="text" required value={newClassName} onChange={e => { setNewClassName(e.target.value); setClassError(null); }}
               placeholder="New class..."
               className="flex-1 bg-slate-955 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-slate-700 placeholder:text-slate-600" />
-            <input type="color" value={newClassColor} onChange={e => setNewClassColor(e.target.value)}
-              className="w-8 h-8 rounded-lg overflow-hidden border border-slate-800 bg-transparent cursor-pointer p-0" />
+            <ColorPicker color={newClassColor} onChange={setNewClassColor} />
             <button type="submit" aria-label="Add class" title="Add class"
               className="bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-200 p-2.5 rounded-xl transition-all">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

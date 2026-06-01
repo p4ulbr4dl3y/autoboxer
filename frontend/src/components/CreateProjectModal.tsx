@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/client';
+import ColorPicker from './ColorPicker';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -113,9 +114,14 @@ export default function CreateProjectModal({ isOpen, onClose, onCreated }: Creat
                 <div key={index} className="flex gap-2.5 items-end bg-slate-955/40 p-2.5 rounded-xl border border-slate-850">
                   <div className="flex-shrink-0">
                     <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Color</label>
-                    <input type="color" value={cls.color}
-                      onChange={e => { const u = [...projectClasses]; u[index].color = e.target.value; setProjectClasses(u); }}
-                      className="w-8 h-8 rounded-lg border border-slate-800 bg-transparent cursor-pointer p-0" />
+                    <ColorPicker
+                      color={cls.color}
+                      onChange={val => {
+                        const u = [...projectClasses];
+                        u[index].color = val;
+                        setProjectClasses(u);
+                      }}
+                    />
                   </div>
                   <div className="flex-1">
                     <label className="block text-[9px] font-bold text-slate-500 uppercase mb-1">Class Name</label>
