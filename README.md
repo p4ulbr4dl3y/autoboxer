@@ -1,21 +1,32 @@
 # Autoboxer
 
-Local AI-assisted visual grounding and object-detection labeling.
+Local, AI-assisted bounding-box labeling for computer-vision datasets.
 
 ![Autoboxer Demo](demo.gif)
 
-Autoboxer automates image annotation using a local visual grounding model (such as NVIDIA's LocateAnything-3B). It turns weeks of manual bounding box annotation into a fast, local workflow.
+Data labeling is the most expensive and slowest link in computer-vision projects. Drawing boxes by hand across thousands of images takes weeks and costs tens of thousands of dollars.
+
+Autoboxer automates that work with a specialized vision-language model, NVIDIA's LocateAnything-3B. Trained on 12 million images and 785 million bounding boxes, the model locates the coordinates of any object on an image from a plain text description. Where a person spends 30 seconds per image, the model does it in a fraction of a second — turning a labeling cycle that used to take weeks into a single working day.
+
+Everything runs locally; no images leave your machine.
+
+## Features
+
+- **Batch labeling** — annotate entire datasets unattended, one model call per class to avoid label ambiguity.
+- **Interactive canvas editor** — review and correct boxes by hand when you need to.
+- **Export to YOLO and COCO** — drop the result straight into your training pipeline.
+- **Project organization** — group work into projects with per-class colors and grounding prompts.
 
 ## Prerequisites
 
-- Python 3.10+ (managed via uv)
+- Python 3.13+ (managed via uv)
 - Node.js 18+ and npm
 
 ## Getting Started
 
 ### Quick Start
 
-Run both frontend and backend services with a single command:
+Run both frontend and backend with a single command:
 
 ```bash
 chmod +x start.sh
