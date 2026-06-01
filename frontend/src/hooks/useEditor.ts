@@ -249,6 +249,8 @@ export function useEditor(
 
   // Track the image container's own dimensions (it uses CSS w-[85%] h-[85%])
   // and compute the actual rendered image size (object-fit: contain).
+  const [containerDim, setContainerDim] = useState({ width: 0, height: 0 });
+
   useEffect(() => {
     const container = imageContainerRef.current;
     if (!container) return;
@@ -257,6 +259,8 @@ export function useEditor(
       const cw = container.clientWidth;
       const ch = container.clientHeight;
       if (cw === 0 || ch === 0) return;
+
+      setContainerDim({ width: cw, height: ch });
 
       if (currentImage?.width && currentImage?.height) {
         // Compute actual image rendered size (object-fit: contain)
@@ -288,24 +292,6 @@ export function useEditor(
     // No-op: dimensions are computed from the container ResizeObserver.
     // Kept for backward compatibility.
   }, []);
-
-  // Track the container's own dimensions for clampPan
-  const [containerDim, setContainerDim] = useState({ width: 0, height: 0 });
-
-  useEffect(() => {
-    const container = imageContainerRef.current;
-    if (!container) return;
-    const sync = () => {
-      setContainerDim({
-        width: container.clientWidth,
-        height: container.clientHeight,
-      });
-    };
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(container);
-    return () => ro.disconnect();
-  }, [currentImageId]);
 
   /**
    * Clamp pan so the image never leaves the visible container area.
@@ -341,18 +327,34 @@ export function useEditor(
     setZoom(1);
     const cw = containerDim.width;
     const ch = containerDim.height;
-    if (cw > 0 && ch > 0) {
-      setPanX((cw - renderedWidth) / 2);
-      setPanY((ch - renderedHeight) / 2);
+    if (cw > 0 && ch > 0 && currentImage?.width && currentImage?.height) {
+      const containerAspect = cw / ch;
+      const imageAspect = currentImage.width / currentImage.height;
+      let w: number, h: number;
+      if (imageAspect > containerAspect) {
+        w = cw;
+        h = w / imageAspect;
+      } else {
+        h = ch;
+        w = h * imageAspect;
+      }
+      setPanX((cw - w) / 2);
+      setPanY((ch - h) / 2);
     } else {
       setPanX(0);
       setPanY(0);
     }
-  }, [renderedWidth, renderedHeight, containerDim]);
+  }, [currentImage, containerDim]);
 
   // Clamp pan after every zoom/pan change to keep the image in view
   useEffect(() => {
-    if (renderedWidth === 0 || renderedHeight === 0) return;
+    if (renderedWidth === 0 || renderedHeight === 0 || !currentImage?.width || !currentImage?.height) return;
+
+    // Skip clamping if the rendered dimensions are not yet synchronized with the current image
+    const imgAspect = currentImage.width / currentImage.height;
+    const renderedAspect = renderedWidth / renderedHeight;
+    if (Math.abs(imgAspect - renderedAspect) > 0.01) return;
+
     const clamped = clampPan(zoom, panX, panY);
     if (clamped.x !== panX || clamped.y !== panY) {
       const handle = requestAnimationFrame(() => {
@@ -361,7 +363,7 @@ export function useEditor(
       });
       return () => cancelAnimationFrame(handle);
     }
-  }, [zoom, panX, panY, renderedWidth, renderedHeight, clampPan]);
+  }, [zoom, panX, panY, renderedWidth, renderedHeight, currentImage, clampPan]);
 
   // Reset zoom/pan during rendering when image changes
   const [prevImageId, setPrevImageId] = useState(currentImageId);
@@ -391,6 +393,33 @@ export function useEditor(
       setPanY(0);
     }
   }
+
+  // Center image on initial load when container dimensions and current image metadata are available
+  const lastCenteredImageIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const cw = containerDim.width;
+    const ch = containerDim.height;
+    if (cw > 0 && ch > 0 && currentImage?.width && currentImage?.height) {
+      if (lastCenteredImageIdRef.current !== currentImageId) {
+        lastCenteredImageIdRef.current = currentImageId;
+        
+        const containerAspect = cw / ch;
+        const imageAspect = currentImage.width / currentImage.height;
+        let w: number, h: number;
+        if (imageAspect > containerAspect) {
+          w = cw;
+          h = w / imageAspect;
+        } else {
+          h = ch;
+          w = h * imageAspect;
+        }
+        
+        setZoom(1);
+        setPanX((cw - w) / 2);
+        setPanY((ch - h) / 2);
+      }
+    }
+  }, [containerDim, currentImageId, currentImage]);
 
   // ── Drawing state ───────────────────────────────────────────────────────
   const [isDrawing, setIsDrawing] = useState(false);

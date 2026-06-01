@@ -100,3 +100,21 @@ def get_image_file(image_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Image file not found on disk")
 
     return FileResponse(db_image.filepath)
+
+
+@router.delete("/images/{image_id}")
+def delete_image(image_id: int, db: Session = Depends(get_db)):
+    """Delete an image, its database record, its annotations, and its file on disk."""
+    db_image = db.query(ImageModel).filter(ImageModel.id == image_id).first()
+    if not db_image:
+        raise HTTPException(status_code=404, detail="Image not found")
+
+    try:
+        if os.path.exists(db_image.filepath):
+            os.remove(db_image.filepath)
+    except Exception as e:
+        print(f"Error removing file {db_image.filepath}: {e}")
+
+    db.delete(db_image)
+    db.commit()
+    return {"detail": f"Image {image_id} deleted successfully"}

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useEditor, cursorForResizeMode, type ResizeMode } from '../hooks/useEditor';
 import { api } from '../api/client';
 import type { ClassCategory, ImageItem } from '../types';
+import { useAppContext } from '../context/AppContext';
 
 // ─── Resize handle positions ─────────────────────────────────────────────────
 
@@ -86,6 +87,8 @@ interface EditorProps {
 export default function Editor({
   currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange, onBeforeNavigate,
 }: EditorProps) {
+
+  const { setDeleteImageInfo } = useAppContext();
 
   const { state, actions, currentImage, currentImageIndex, handleStartResize } = useEditor(
     currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange, onBeforeNavigate,
@@ -209,6 +212,24 @@ export default function Editor({
             <IconRedo />
           </button>
 
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Delete Image */}
+          <button
+            onClick={() => {
+              if (currentImage) {
+                setDeleteImageInfo({
+                  id: currentImage.id,
+                  filename: currentImage.filename,
+                  fromEditor: true,
+                });
+              }
+            }}
+            title="Delete Image from Dataset"
+            className="p-2 rounded-lg text-rose-400 hover:text-rose-200 hover:bg-rose-950/40 transition-all"
+          >
+            <IconTrash />
+          </button>
 
         </div>
 

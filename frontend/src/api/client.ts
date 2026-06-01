@@ -90,6 +90,8 @@ export const api = {
       request<Annotation[]>(`/api/v1/images/${imageId}/auto-label?${params.toString()}`, {
         method: 'POST',
       }),
+    delete: (imageId: number) =>
+      request<{ detail: string }>(`/api/v1/images/${imageId}`, { method: 'DELETE' }),
   },
 
   // Annotations

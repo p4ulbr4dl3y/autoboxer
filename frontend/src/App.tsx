@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import './App.css';
 import { useProjects, useProjectDetail } from './hooks/useProjects';
 import { api } from './api/client';
@@ -7,10 +7,13 @@ import AppContext from './context/AppContext';
 import ConfirmModal from './components/ConfirmModal';
 
 export default function App() {
+  const navigate = useNavigate();
+
   // Confirmation / info modals
   const [deleteProjectId, setDeleteProjectId] = useState<number | null>(null);
   const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
   const [deleteClassInfo, setDeleteClassInfo] = useState<{ id: number; name: string } | null>(null);
+  const [deleteImageInfo, setDeleteImageInfo] = useState<{ id: number; filename: string; fromEditor?: boolean } | null>(null);
 
   const [isBatchLabeling, setIsBatchLabeling] = useState(false);
 
@@ -23,6 +26,7 @@ export default function App() {
   // Tracks the currently-open project so async pollers can detect navigation
   // away and stop touching another project's state.
   const currentProjectIdRef = useRef<number | null>(null);
+  const navigatingWithinEditorRef = useRef(false);
 
   const handleDeleteClass = useCallback(async (classId: number) => {
     try {
@@ -92,12 +96,59 @@ export default function App() {
     }
   }, [deleteProjectId, deleteProject]);
 
+  const handleConfirmDeleteImage = useCallback(async () => {
+    if (deleteImageInfo === null) return;
+    const { id: imageId, fromEditor } = deleteImageInfo;
+    const targetImage = images.find(img => img.id === imageId);
+    const projectId = targetImage?.project_id || (images.length > 0 ? images[0].project_id : null);
+
+    try {
+      await api.images.delete(imageId);
+      
+      setImages(prev => prev.filter(img => img.id !== imageId));
+
+      if (projectId) {
+        await fetchStats(projectId);
+        await fetchProjects();
+      }
+
+      if (fromEditor && projectId) {
+        const currentIndex = images.findIndex(img => img.id === imageId);
+        let targetNextImageId: number | null = null;
+
+        if (images.length > 1) {
+          if (currentIndex < images.length - 1) {
+            targetNextImageId = images[currentIndex + 1].id;
+          } else {
+            targetNextImageId = images[currentIndex - 1].id;
+          }
+        }
+
+        navigatingWithinEditorRef.current = true;
+
+        if (targetNextImageId !== null) {
+          navigate(`/projects/${projectId}/images/${targetNextImageId}`, { replace: true });
+          setTimeout(() => { navigatingWithinEditorRef.current = false; }, 0);
+        } else {
+          navigate(`/projects/${projectId}`);
+          setTimeout(() => { navigatingWithinEditorRef.current = false; }, 0);
+        }
+      }
+    } catch (e) {
+      setErrorModal({ title: 'Delete Image Failed', message: (e as Error).message });
+    } finally {
+      setDeleteImageInfo(null);
+    }
+  }, [deleteImageInfo, images, setImages, fetchStats, fetchProjects, navigate]);
+
   const contextValue = {
     projects, stats, fetchProjects, fetchStats, deleteProject,
     images, setImages, classes, setClasses,
     statusFilter, setStatusFilter, fetchProjectDetails, fetchProjectImages,
     deleteProjectId, setDeleteProjectId,
     deleteClassInfo, setDeleteClassInfo,
+    deleteImageInfo, setDeleteImageInfo,
+    navigatingWithinEditorRef,
     errorModal, setErrorModal,
     isBatchLabeling, handleBatchLabel,
   };
@@ -125,6 +176,16 @@ export default function App() {
         variant="danger"
         onConfirm={() => { if (deleteClassInfo) handleDeleteClass(deleteClassInfo.id); }}
         onClose={() => setDeleteClassInfo(null)}
+      />
+
+      <ConfirmModal
+        isOpen={deleteImageInfo !== null}
+        title="Delete Image"
+        message={`Are you sure you want to permanently delete "${deleteImageInfo?.filename}"? This will delete the image file from disk and all its annotations.`}
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={handleConfirmDeleteImage}
+        onClose={() => setDeleteImageInfo(null)}
       />
 
       <ConfirmModal

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import Editor from '../components/Editor';
@@ -11,18 +11,13 @@ export default function EditorPage() {
     images, classes, setImages,
     fetchProjectDetails, fetchProjectImages, fetchStats,
     setErrorModal,
+    navigatingWithinEditorRef,
   } = useAppContext();
 
   const pid = Number(projectId);
   const imgId = Number(imageId);
 
   const [editorDirty, setEditorDirty] = useState(false);
-
-  // Ref for synchronous dirty check — bypasses React's async state batching.
-  // When the editor is about to navigate between images (auto-advance, arrow
-  // keys), it sets this to true *before* calling navigate(), so the blocker
-  // function reads the up-to-date value and skips blocking.
-  const navigatingWithinEditor = useRef(false);
 
   // Load project details and ALL images on mount (ignore gallery filter)
   useEffect(() => {
@@ -36,30 +31,30 @@ export default function EditorPage() {
   // Block router navigation when editor is dirty, but not during internal
   // image-to-image navigation (auto-advance, arrow keys, thumbnail clicks).
   const blocker = useBlocker(() => {
-    if (navigatingWithinEditor.current) return false;
+    if (navigatingWithinEditorRef.current) return false;
     return editorDirty;
   });
 
   const handleSaveAndExit = useCallback(() => {
-    navigatingWithinEditor.current = true;
+    navigatingWithinEditorRef.current = true;
     navigate(`/projects/${pid}`);
     fetchProjectImages(pid);
     fetchStats(pid);
-  }, [navigate, pid, fetchProjectImages, fetchStats]);
+  }, [navigate, pid, fetchProjectImages, fetchStats, navigatingWithinEditorRef]);
 
   const handleImageChange = useCallback((newImageId: number) => {
     navigate(`/projects/${pid}/images/${newImageId}`, { replace: true });
     // Reset the bypass flag after navigation is initiated, so subsequent
     // external navigations (Gallery link, browser back) are properly blocked.
-    setTimeout(() => { navigatingWithinEditor.current = false; }, 0);
-  }, [navigate, pid]);
+    setTimeout(() => { navigatingWithinEditorRef.current = false; }, 0);
+  }, [navigate, pid, navigatingWithinEditorRef]);
 
   // Called by the editor hook BEFORE navigate() during internal navigation
   // (auto-advance, arrow keys, thumbnail clicks). Sets the bypass flag so
   // the blocker function returns false.
   const handleBeforeNavigate = useCallback(() => {
-    navigatingWithinEditor.current = true;
-  }, []);
+    navigatingWithinEditorRef.current = true;
+  }, [navigatingWithinEditorRef]);
 
   return (
     <>

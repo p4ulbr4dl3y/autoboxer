@@ -25,6 +25,9 @@ interface AppContextType {
   setDeleteProjectId: (id: number | null) => void;
   deleteClassInfo: { id: number; name: string } | null;
   setDeleteClassInfo: (info: { id: number; name: string } | null) => void;
+  deleteImageInfo: { id: number; filename: string; fromEditor?: boolean } | null;
+  setDeleteImageInfo: (info: { id: number; filename: string; fromEditor?: boolean } | null) => void;
+  navigatingWithinEditorRef: React.MutableRefObject<boolean>;
   errorModal: { title: string; message: string } | null;
   setErrorModal: (modal: { title: string; message: string } | null) => void;
 
