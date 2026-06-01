@@ -21,11 +21,11 @@ export default function Header({ view, selectedProjectId }: HeaderProps) {
         </div>
       </div>
 
-      {/* Centered navigation pill container, exactly like oMLX Status/Models tabs */}
-      <div className="flex items-center gap-1.5 bg-slate-950/60 p-1 rounded-full border border-slate-800/80">
+      {/* Right side navigation pill container, exactly like oMLX Status/Models tabs but on the right */}
+      <div className="flex items-center gap-1.5 bg-slate-955 border border-slate-800 rounded-full p-1 text-xs">
         <Link
           to="/"
-          className={`px-4 py-1 rounded-full text-xs font-semibold tracking-wide transition-all duration-150 ${
+          className={`px-4.5 py-1 rounded-full text-xs font-semibold tracking-wide transition-all duration-150 ${
             view === 'dashboard'
               ? 'bg-slate-850 text-white border border-slate-750/80 shadow-sm'
               : 'text-slate-400 hover:text-slate-200 border border-transparent'
@@ -36,7 +36,7 @@ export default function Header({ view, selectedProjectId }: HeaderProps) {
         {selectedProjectId && (
           <Link
             to={`/projects/${selectedProjectId}`}
-            className={`px-4 py-1 rounded-full text-xs font-semibold tracking-wide transition-all duration-150 ${
+            className={`px-4.5 py-1 rounded-full text-xs font-semibold tracking-wide transition-all duration-150 ${
               view === 'project'
                 ? 'bg-slate-850 text-white border border-slate-750/80 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200 border border-transparent'
@@ -45,14 +45,6 @@ export default function Header({ view, selectedProjectId }: HeaderProps) {
             Gallery
           </Link>
         )}
-      </div>
-
-      {/* Right placeholder side to match the balanced oMLX header */}
-      <div className="flex items-center gap-4 text-xs text-slate-400">
-        <div className="flex items-center gap-1.5 bg-slate-850 border border-slate-800 px-2.5 py-1 rounded-lg">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-          <span className="text-[10px] font-medium tracking-wide">MLX Active</span>
-        </div>
       </div>
     </header>
   );
