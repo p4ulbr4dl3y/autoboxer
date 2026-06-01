@@ -322,7 +322,7 @@ export default function Editor({
                       className={`absolute border-2 transition-shadow ${isSelected ? 'ring-2 ring-white/50 shadow-2xl' : 'hover:bg-white/5'}`}>
                       {/* Label */}
                       <div style={{ backgroundColor: boxColor }}
-                        className="absolute -top-6 left-[-2px] text-[10px] text-white px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shadow select-none">
+                        className="absolute top-0 left-0 text-[9px] text-white px-1.5 py-0.5 rounded-br font-mono font-bold whitespace-nowrap shadow select-none z-10">
                         {ann.label}
                       </div>
                       {/* Resize handles (only when selected) */}

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../api/client';
 import type { Project, ProjectStats, ClassCategory, ImageItem } from '../types';
+
+const DEFAULT_COLORS = ['#34C759', '#007AFF', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
 
 interface ProjectGalleryProps {
   project: Project;
@@ -28,6 +30,12 @@ export default function ProjectGallery({
   const [newClassColor, setNewClassColor] = useState('#34C759');
   const [classError, setClassError] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+
+  // Automatically cycle default color for new class based on existing classes length
+  useEffect(() => {
+    const nextIndex = classes.length % DEFAULT_COLORS.length;
+    setNewClassColor(DEFAULT_COLORS[nextIndex]);
+  }, [classes.length]);
 
   const handleUploadImages = async () => {
     if (!uploadFiles) return;
