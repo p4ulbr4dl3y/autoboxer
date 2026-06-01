@@ -91,6 +91,7 @@ export interface EditorActions {
   setZoom: (z: number | ((prev: number) => number)) => void;
   setPanX: (x: number | ((prev: number) => number)) => void;
   setPanY: (y: number | ((prev: number) => number)) => void;
+  handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
 
   // Space key tracking
   setSpaceHeld: (v: boolean) => void;
@@ -725,28 +726,23 @@ export function useEditor(
   }, [currentImageIndex, images, currentImageId, annotations, classes, pushHistory]);
 
   // ── Zoom with wheel ─────────────────────────────────────────────────────
-  useEffect(() => {
+  // Handler is exposed for use via onWheel in the component.
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault();
     const container = imageContainerRef.current;
     if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
 
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = container.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-
-      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-      setZoom(prevZoom => {
-        const newZoom = Math.max(0.2, Math.min(8, prevZoom * zoomFactor));
-        const scale = newZoom / prevZoom;
-        setPanX(prev => mouseX - (mouseX - prev) * scale);
-        setPanY(prev => mouseY - (mouseY - prev) * scale);
-        return newZoom;
-      });
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: false });
-    return () => container.removeEventListener('wheel', handleWheel);
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    setZoom(prevZoom => {
+      const newZoom = Math.max(0.2, Math.min(8, prevZoom * zoomFactor));
+      const scale = newZoom / prevZoom;
+      setPanX(prev => mouseX - (mouseX - prev) * scale);
+      setPanY(prev => mouseY - (mouseY - prev) * scale);
+      return newZoom;
+    });
   }, []);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -918,7 +914,7 @@ export function useEditor(
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     handleCopyFromPrev,
     imageContainerRef, imageRef, updateRenderedDimensions,
-    setZoom, setPanX, setPanY,
+    setZoom, setPanX, setPanY, handleWheel,
     setSpaceHeld,
   };
 

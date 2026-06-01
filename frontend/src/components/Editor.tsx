@@ -112,7 +112,7 @@ export default function Editor({
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     handleCopyFromPrev,
     imageContainerRef, imageRef,
-    setZoom, setPanX, setPanY,
+    setZoom, setPanX, setPanY, handleWheel,
   } = actions;
 
   // ── Derived state ─────────────────────────────────────────────────────
@@ -314,6 +314,7 @@ export default function Editor({
           onPointerDown={handleCanvasPointerDown}
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={handleCanvasPointerUp}
+          onWheel={handleWheel}
           onContextMenu={e => e.preventDefault()}
           className={`relative border border-slate-800 shadow-2xl select-none touch-none overflow-hidden w-[85%] h-[85%] ${cursorClass}`}>
           <div style={{
