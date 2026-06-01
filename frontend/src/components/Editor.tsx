@@ -1,6 +1,75 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useMemo } from 'react';
+import { useEditor, cursorForResizeMode, type ResizeMode } from '../hooks/useEditor';
 import { api } from '../api/client';
-import type { Annotation, ClassCategory, ImageItem } from '../types';
+import type { ClassCategory, ImageItem } from '../types';
+
+// ─── Resize handle positions ─────────────────────────────────────────────────
+
+const RESIZE_HANDLES: { mode: ResizeMode; className: string; style: React.CSSProperties }[] = [
+  { mode: 'nw', className: 'cursor-nw-resize', style: { top: -5, left: -5 } },
+  { mode: 'n',  className: 'cursor-n-resize',  style: { top: -5, left: '50%', transform: 'translateX(-50%)' } },
+  { mode: 'ne', className: 'cursor-ne-resize', style: { top: -5, right: -5 } },
+  { mode: 'e',  className: 'cursor-e-resize',  style: { top: '50%', right: -5, transform: 'translateY(-50%)' } },
+  { mode: 'se', className: 'cursor-se-resize', style: { bottom: -5, right: -5 } },
+  { mode: 's',  className: 'cursor-s-resize',  style: { bottom: -5, left: '50%', transform: 'translateX(-50%)' } },
+  { mode: 'sw', className: 'cursor-sw-resize', style: { bottom: -5, left: -5 } },
+  { mode: 'w',  className: 'cursor-w-resize',  style: { top: '50%', left: -5, transform: 'translateY(-50%)' } },
+];
+
+// ─── SVG Icons ───────────────────────────────────────────────────────────────
+
+const IconCursor = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+  </svg>
+);
+
+const IconDraw = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+  </svg>
+);
+
+const IconUndo = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4" />
+  </svg>
+);
+
+const IconRedo = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4" />
+  </svg>
+);
+
+const IconCopy = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+  </svg>
+);
+
+const IconTrash = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+  </svg>
+);
+
+const IconZoomIn = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+  </svg>
+);
+
+const IconZoomOut = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+  </svg>
+);
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 interface EditorProps {
   currentImageId: number;
@@ -16,288 +85,77 @@ interface EditorProps {
 export default function Editor({
   currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange,
 }: EditorProps) {
-  const currentImage = images.find(img => img.id === currentImageId);
-  const currentImageIndex = images.findIndex(img => img.id === currentImageId);
 
-  // Editor state
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [selectedAnnId, setSelectedAnnId] = useState<number | string | null>(null);
-  const [canvasMode, setCanvasMode] = useState<'select' | 'draw'>('select');
-  const [activeClass, setActiveClass] = useState<string>('');
-  const [isDirty, setIsDirty] = useState(false);
+  const { state, actions, currentImage, currentImageIndex, handleStartResize } = useEditor(
+    currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange,
+  );
 
-  // Report unsaved-changes state upward so the app can guard navigation.
-  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
+  const {
+    annotations, selectedAnnId, canvasMode, activeClass, isDirty,
+    canUndo, canRedo,
+    zoom, panX, panY, isPanning, spaceHeld,
+    isDrawing, drawStart, drawEnd,
+    isDragging, resizeMode,
+    fillOpacity, autoAdvance, annotationFilter,
+    renderedWidth, renderedHeight,
+    contextMenu,
+    dimensionTooltip,
+  } = state;
 
-  // Warn before a full page unload (refresh / tab close) when there are
-  // unsaved annotations.
-  useEffect(() => {
-    if (!isDirty) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
+  const {
+    setSelectedAnnId, setCanvasMode, setActiveClass,
+    setFillOpacity, setAutoAdvance, setAnnotationFilter, setContextMenu,
+    undo, redo,
+    handleCanvasPointerDown, handleCanvasPointerMove, handleCanvasPointerUp,
+    handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
+    handleSaveAnnotations, handleNextImage, handlePrevImage,
+    handleCopyFromPrev,
+    imageContainerRef, imageRef, updateRenderedDimensions,
+    setZoom, setPanX, setPanY,
+  } = actions;
 
-  // Canvas sizing
-  const [renderedWidth, setRenderedWidth] = useState(0);
-  const [renderedHeight, setRenderedHeight] = useState(0);
-  const imageContainerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
+  // ── Derived state ─────────────────────────────────────────────────────
 
-  // Drawing state
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
-  const [drawEnd, setDrawEnd] = useState({ x: 0, y: 0 });
+  const filteredAnnotations = useMemo(() => {
+    if (annotationFilter.size === 0) return annotations;
+    return annotations.filter(a => annotationFilter.has(a.label || ''));
+  }, [annotations, annotationFilter]);
 
-  // Dragging state
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [draggedAnnId, setDraggedAnnId] = useState<number | string | null>(null);
-  const [dragMode, setDragMode] = useState<'move' | 'se'>('move');
-  const [dragInitialBox, setDragInitialBox] = useState({ x1: 0, y1: 0, x2: 0, y2: 0 });
+  const uniqueClassNames = useMemo(() => {
+    return [...new Set(annotations.map(a => a.label || ''))];
+  }, [annotations]);
 
-  // Set initial active class
-  useEffect(() => {
-    if (classes.length > 0 && !activeClass) {
-      setActiveClass(classes[0].name);
-    }
-  }, [classes, activeClass]);
+  const cursorClass = useMemo(() => {
+    if (spaceHeld || isPanning) return 'cursor-grab';
+    if (canvasMode === 'draw') return 'cursor-crosshair';
+    if (isDragging && resizeMode !== 'move') return cursorForResizeMode(resizeMode);
+    return 'cursor-default';
+  }, [spaceHeld, isPanning, canvasMode, isDragging, resizeMode]);
 
-  // Fetch annotations
-  const fetchAnnotations = useCallback(async (imageId: number) => {
-    try {
-      const data = await api.annotations.get(imageId);
-      const mapped = data.map((ann: Annotation) => {
-        const cls = classes.find(c => c.name === ann.label);
-        return { ...ann, color: cls ? cls.color : '#34C759' };
-      });
-      setAnnotations(mapped);
-      setSelectedAnnId(mapped.length > 0 ? mapped[0].id : null);
-      setIsDirty(false);
-    } catch (e) {
-      console.error(e);
-    }
-  }, [classes]);
+  // ── Context menu handler ──────────────────────────────────────────────
 
-  useEffect(() => {
-    fetchAnnotations(currentImageId);
-  }, [currentImageId, fetchAnnotations]);
-
-  // Save annotations
-  const handleSaveAnnotations = useCallback(async () => {
-    try {
-      const cleaned = annotations.map((ann, index) => ({
-        box_id: index + 1,
-        x1: Math.round(ann.x1),
-        y1: Math.round(ann.y1),
-        x2: Math.round(ann.x2),
-        y2: Math.round(ann.y2),
-        label: ann.label,
-      }));
-      await api.annotations.update(currentImageId, cleaned);
-      const newStatus = cleaned.length > 0 ? 'labeled' : 'unlabeled';
-      setImages(prev => prev.map(img => img.id === currentImageId ? { ...img, status: newStatus } : img));
-      setIsDirty(false);
-      return true;
-    } catch (e: any) {
-      console.error(e);
-      onError?.('Save Failed', e?.message || 'Could not save annotations. Please try again.');
-      return false;
-    }
-  }, [annotations, currentImageId, setImages, onError]);
-
-  // Navigation
-  const handleNextImage = async () => {
-    const saved = await handleSaveAnnotations();
-    if (saved && currentImageIndex < images.length - 1) {
-      onImageChange(images[currentImageIndex + 1].id);
-    }
-  };
-
-  const handlePrevImage = async () => {
-    const saved = await handleSaveAnnotations();
-    if (saved && currentImageIndex > 0) {
-      onImageChange(images[currentImageIndex - 1].id);
-    }
-  };
-
-  // Canvas sizing
-  const updateRenderedDimensions = () => {
-    if (imageRef.current) {
-      setRenderedWidth(imageRef.current.clientWidth);
-      setRenderedHeight(imageRef.current.clientHeight);
-    }
-  };
-
-  // Keep the overlay aligned to the rendered image on any layout change
-  // (window resize, sidebar reflow, image swap), not just window resizes.
-  useEffect(() => {
-    const el = imageRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateRenderedDimensions);
-      return () => window.removeEventListener('resize', updateRenderedDimensions);
-    }
-    const observer = new ResizeObserver(() => updateRenderedDimensions());
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [currentImageId]);
-
-  // Canvas helpers
-  const getCanvasMouseCoords = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!imageContainerRef.current) return { x: 0, y: 0 };
-    const rect = imageContainerRef.current.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(renderedWidth, e.clientX - rect.left)),
-      y: Math.max(0, Math.min(renderedHeight, e.clientY - rect.top)),
-    };
-  };
-
-  const findAnnotationAtCoords = (x: number, y: number): Annotation | null => {
-    if (!currentImage) return null;
-    const origW = currentImage.width || 1;
-    const origH = currentImage.height || 1;
-    const origX = (x / renderedWidth) * origW;
-    const origY = (y / renderedHeight) * origH;
-    for (let i = annotations.length - 1; i >= 0; i--) {
-      const ann = annotations[i];
-      if (origX >= ann.x1 && origX <= ann.x2 && origY >= ann.y1 && origY <= ann.y2) return ann;
-    }
-    return null;
-  };
-
-  // Canvas mouse handlers
-  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    const coords = getCanvasMouseCoords(e);
-    if (canvasMode === 'draw') {
-      setIsDrawing(true);
-      setDrawStart(coords);
-      setDrawEnd(coords);
+  const handleContextMenuAction = (action: 'delete' | 'duplicate' | string) => {
+    if (!contextMenu) return;
+    if (action === 'delete') {
+      handleDeleteAnnotation(contextMenu.annId);
+    } else if (action === 'duplicate') {
+      handleDuplicateAnnotation(contextMenu.annId);
     } else {
-      const clickedAnn = findAnnotationAtCoords(coords.x, coords.y);
-      if (clickedAnn) {
-        setSelectedAnnId(clickedAnn.id);
-        setIsDragging(true);
-        setDraggedAnnId(clickedAnn.id);
-        setDragStart(coords);
-        setDragInitialBox({ x1: clickedAnn.x1, y1: clickedAnn.y1, x2: clickedAnn.x2, y2: clickedAnn.y2 });
-        setDragMode('move');
-      } else {
-        setSelectedAnnId(null);
-      }
+      // It's a class name
+      setSelectedAnnId(contextMenu.annId);
+      handleChangeSelectedClass(action);
     }
+    setContextMenu(null);
   };
-
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const coords = getCanvasMouseCoords(e);
-    if (isDrawing) {
-      setDrawEnd(coords);
-    } else if (isDragging && draggedAnnId && currentImage) {
-      const deltaX = coords.x - dragStart.x;
-      const deltaY = coords.y - dragStart.y;
-      const origW = currentImage.width || 1;
-      const origH = currentImage.height || 1;
-      const deltaOrigX = (deltaX / renderedWidth) * origW;
-      const deltaOrigY = (deltaY / renderedHeight) * origH;
-
-      setAnnotations(prev => prev.map(ann => {
-        if (ann.id !== draggedAnnId) return ann;
-        let { x1: newX1, y1: newY1, x2: newX2, y2: newY2 } = dragInitialBox;
-        if (dragMode === 'move') {
-          newX1 += deltaOrigX; newX2 += deltaOrigX;
-          newY1 += deltaOrigY; newY2 += deltaOrigY;
-          if (newX1 < 0) { newX2 -= newX1; newX1 = 0; }
-          if (newX2 > origW) { newX1 -= (newX2 - origW); newX2 = origW; }
-          if (newY1 < 0) { newY2 -= newY1; newY1 = 0; }
-          if (newY2 > origH) { newY1 -= (newY2 - origH); newY2 = origH; }
-        } else if (dragMode === 'se') {
-          newX2 = Math.max(newX1 + 10, dragInitialBox.x2 + deltaOrigX);
-          newY2 = Math.max(newY1 + 10, dragInitialBox.y2 + deltaOrigY);
-        }
-        return {
-          ...ann,
-          x1: Math.max(0, Math.min(origW, newX1)),
-          y1: Math.max(0, Math.min(origH, newY1)),
-          x2: Math.max(0, Math.min(origW, newX2)),
-          y2: Math.max(0, Math.min(origH, newY2)),
-        };
-      }));
-    }
-  };
-
-  const handleCanvasMouseUp = () => {
-    const wasDragging = isDragging;
-    if (isDrawing && currentImage) {
-      setIsDrawing(false);
-      const origW = currentImage.width || 1;
-      const origH = currentImage.height || 1;
-      const origX1 = (Math.min(drawStart.x, drawEnd.x) / renderedWidth) * origW;
-      const origY1 = (Math.min(drawStart.y, drawEnd.y) / renderedHeight) * origH;
-      const origX2 = (Math.max(drawStart.x, drawEnd.x) / renderedWidth) * origW;
-      const origY2 = (Math.max(drawStart.y, drawEnd.y) / renderedHeight) * origH;
-
-      if (origX2 - origX1 > 10 && origY2 - origY1 > 10) {
-        const cls = classes.find(c => c.name === activeClass);
-        const tempId = `temp_${Date.now()}`;
-        setAnnotations(prev => [...prev, {
-          id: tempId, image_id: currentImage.id, box_id: prev.length + 1,
-          x1: Math.round(origX1), y1: Math.round(origY1), x2: Math.round(origX2), y2: Math.round(origY2),
-          label: activeClass || 'object', color: cls ? cls.color : '#34C759',
-        }]);
-        setSelectedAnnId(tempId);
-        setIsDirty(true);
-      }
-      setCanvasMode('select');
-    }
-    if (wasDragging) setIsDirty(true);
-    setIsDragging(false);
-    setDraggedAnnId(null);
-  };
-
-  const handleDeleteAnnotation = (id: number | string) => {
-    setAnnotations(prev => prev.filter(ann => ann.id !== id));
-    if (selectedAnnId === id) setSelectedAnnId(null);
-    setIsDirty(true);
-  };
-
-  const handleChangeSelectedClass = (className: string) => {
-    if (selectedAnnId === null) return;
-    const cls = classes.find(c => c.name === className);
-    setAnnotations(prev => prev.map(ann =>
-      ann.id === selectedAnnId ? { ...ann, label: className, color: cls ? cls.color : '#34C759' } : ann
-    ));
-    setIsDirty(true);
-  };
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      // Don't act on canvas shortcuts while a modal dialog is open over the editor.
-      if (document.querySelector('[role="dialog"]')) return;
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedAnnId !== null) handleDeleteAnnotation(selectedAnnId);
-      } else if (e.key === 'ArrowRight') {
-        handleNextImage();
-      } else if (e.key === 'ArrowLeft') {
-        handlePrevImage();
-      } else if (e.key === 'Enter') {
-        if (currentImageIndex < images.length - 1) handleNextImage();
-        else handleSaveAnnotations().then(saved => { if (saved) onSaveAndExit(); });
-      } else if (e.key === 'd' || e.key === 'в') {
-        setCanvasMode('draw');
-      } else if (e.key === 's' || e.key === 'ы') {
-        setCanvasMode('select');
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedAnnId, annotations, currentImageId, currentImageIndex, images]);
 
   if (!currentImage) return null;
 
+
+
   return (
     <div className="flex-1 flex overflow-hidden h-[calc(100vh-69px)]">
-      {/* Left sidebar: Thumbnails */}
+
+      {/* ── Left sidebar: Thumbnails ─────────────────────────────────── */}
       <aside className="w-48 border-r border-slate-850 bg-slate-950/60 flex flex-col flex-shrink-0">
         <div className="p-4 border-b border-slate-850">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Dataset Images</h3>
@@ -322,29 +180,117 @@ export default function Editor({
         </div>
       </aside>
 
-      {/* Center Canvas */}
+      {/* ── Center Canvas ────────────────────────────────────────────── */}
       <section className="flex-1 bg-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        {/* Toolbar */}
-        <div className="absolute top-4 left-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1.5 flex items-center gap-2 z-10 backdrop-blur shadow-2xl">
-          <button onClick={() => setCanvasMode('select')} title="Select Mode"
+
+        {/* ── Toolbar ────────────────────────────────────────────────── */}
+        <div className="absolute top-4 left-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1.5 flex items-center gap-1.5 z-10 backdrop-blur shadow-2xl">
+          {/* Select / Draw mode */}
+          <button onClick={() => setCanvasMode('select')} title="Select Mode (S)"
             className={`p-2 rounded-lg transition-all ${canvasMode === 'select' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-            </svg>
+            <IconCursor />
           </button>
-          <button onClick={() => setCanvasMode('draw')} title="Draw Bounding Box (Hotkey: D)"
+          <button onClick={() => setCanvasMode('draw')} title="Draw Bounding Box (D)"
             className={`p-2 rounded-lg transition-all ${canvasMode === 'draw' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <IconDraw />
           </button>
-          <div className="h-4 w-[1px] bg-slate-850" />
-          <span className="text-[10px] text-slate-450 px-2 font-mono">
-            {canvasMode === 'draw' ? 'DRAW BOX MODE' : 'SELECT / DRAG MODE'}
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Undo / Redo */}
+          <button onClick={undo} disabled={!canUndo} title="Undo (Cmd+Z)"
+            className="p-2 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all">
+            <IconUndo />
+          </button>
+          <button onClick={redo} disabled={!canRedo} title="Redo (Cmd+Shift+Z)"
+            className="p-2 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all">
+            <IconRedo />
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Copy from previous */}
+          <button onClick={handleCopyFromPrev} disabled={currentImageIndex <= 0} title="Copy annotations from previous image"
+            className="p-2 rounded-lg text-slate-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-all">
+            <IconCopy />
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Zoom display */}
+          <span className="text-[10px] text-slate-500 font-mono px-1 min-w-[38px] text-center">
+            {Math.round(zoom * 100)}%
+          </span>
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Fill opacity */}
+          <div className="flex items-center gap-1.5 px-1">
+            <span className="text-[9px] text-slate-500 uppercase">Fill</span>
+            <input type="range" min={0} max={100} value={Math.round(fillOpacity * 100)}
+              onChange={e => setFillOpacity(Number(e.target.value) / 100)}
+              title={`Fill opacity: ${Math.round(fillOpacity * 100)}%`}
+              className="w-16 h-1 accent-indigo-500" />
+          </div>
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Auto-advance toggle */}
+          <button onClick={() => setAutoAdvance(!autoAdvance)}
+            title={`Auto-advance: ${autoAdvance ? 'ON' : 'OFF'}`}
+            className={`px-2 py-1.5 rounded-lg text-[10px] font-mono font-bold transition-all ${
+              autoAdvance ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/40' : 'text-slate-500 hover:text-slate-300'
+            }`}>
+            AUTO
+          </button>
+
+          <div className="h-4 w-[1px] bg-slate-800" />
+
+          {/* Mode label */}
+          <span className="text-[10px] text-slate-500 px-1 font-mono">
+            {spaceHeld ? 'PAN' : isPanning ? 'PANNING' : canvasMode === 'draw' ? 'DRAW' : 'SELECT'}
           </span>
         </div>
 
-        {/* Navigation arrows */}
+        {/* ── Zoom controls (top-right) ──────────────────────────────── */}
+        <div className="absolute top-4 right-6 bg-slate-900/90 border border-slate-850 rounded-xl p-1 flex items-center gap-0.5 z-10 backdrop-blur shadow-2xl">
+          <button onClick={() => {
+            const container = imageContainerRef.current;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const newZoom = Math.min(8, zoom * 1.25);
+            const scale = newZoom / zoom;
+            setPanX(cx - (cx - panX) * scale);
+            setPanY(cy - (cy - panY) * scale);
+            setZoom(newZoom);
+          }} title="Zoom In"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+            <IconZoomIn />
+          </button>
+          <button onClick={() => { setZoom(1); setPanX(0); setPanY(0); }} title="Reset Zoom (Cmd+0)"
+            className="px-1.5 py-1 rounded-lg text-[10px] text-slate-500 hover:text-white font-mono transition-all">
+            {Math.round(zoom * 100)}%
+          </button>
+          <button onClick={() => {
+            const container = imageContainerRef.current;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const newZoom = Math.max(0.2, zoom * 0.8);
+            const scale = newZoom / zoom;
+            setPanX(cx - (cx - panX) * scale);
+            setPanY(cy - (cy - panY) * scale);
+            setZoom(newZoom);
+          }} title="Zoom Out"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white transition-all">
+            <IconZoomOut />
+          </button>
+        </div>
+
+        {/* ── Navigation arrows ──────────────────────────────────────── */}
         <div className="absolute left-6 inset-y-0 flex items-center pointer-events-none">
           <button onClick={handlePrevImage} disabled={currentImageIndex === 0} aria-label="Previous image" title="Previous image (←)"
             className="bg-slate-900/80 border border-slate-850 hover:border-slate-750 hover:bg-slate-855 text-slate-300 w-10 h-10 rounded-full flex items-center justify-center pointer-events-auto hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all shadow-xl">
@@ -362,76 +308,148 @@ export default function Editor({
           </button>
         </div>
 
-        {/* Image container with bounding box overlays */}
+        {/* ── Image container with zoom/pan transform ─────────────────── */}
         <div ref={imageContainerRef}
-          onMouseDown={handleCanvasMouseDown} onMouseMove={handleCanvasMouseMove} onMouseUp={handleCanvasMouseUp}
-          className="max-h-[85%] max-w-[85%] relative border border-slate-800 shadow-2xl select-none">
-          <img ref={imageRef} src={api.images.fileUrl(currentImageId)} alt=""
-            onLoad={updateRenderedDimensions}
-            className="max-h-full max-w-full block pointer-events-none" />
+          onPointerDown={handleCanvasPointerDown}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          onContextMenu={e => e.preventDefault()}
+          className={`relative border border-slate-800 shadow-2xl select-none touch-none overflow-hidden ${cursorClass}`}
+          style={{ maxWidth: '85%', maxHeight: '85%' }}>
+          <div style={{
+            transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
+            transformOrigin: '0 0',
+          }}>
+            <img ref={imageRef} src={api.images.fileUrl(currentImageId)} alt=""
+              onLoad={updateRenderedDimensions}
+              className="max-h-[85vh] max-w-full block pointer-events-none" />
 
-          {renderedWidth > 0 && renderedHeight > 0 && (
-            <div className="absolute inset-0 w-full h-full pointer-events-auto z-20 overflow-hidden">
-              {annotations.map(ann => {
-                const origW = currentImage.width || 1;
-                const origH = currentImage.height || 1;
-                const left = (ann.x1 / origW) * renderedWidth;
-                const top = (ann.y1 / origH) * renderedHeight;
-                const width = ((ann.x2 - ann.x1) / origW) * renderedWidth;
-                const height = ((ann.y2 - ann.y1) / origH) * renderedHeight;
-                const isSelected = ann.id === selectedAnnId;
-                const boxColor = ann.color || '#34C759';
+            {renderedWidth > 0 && renderedHeight > 0 && (
+              <div className="absolute inset-0 w-full h-full pointer-events-auto z-20 overflow-hidden">
+                {filteredAnnotations.map(ann => {
+                  const origW = currentImage.width || 1;
+                  const origH = currentImage.height || 1;
+                  const left = (ann.x1 / origW) * renderedWidth;
+                  const top = (ann.y1 / origH) * renderedHeight;
+                  const width = ((ann.x2 - ann.x1) / origW) * renderedWidth;
+                  const height = ((ann.y2 - ann.y1) / origH) * renderedHeight;
+                  const isSelected = ann.id === selectedAnnId;
+                  const boxColor = ann.color || '#34C759';
 
-                return (
-                  <div key={ann.id}
-                    style={{ left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px`, borderColor: boxColor }}
-                    className={`absolute border-2 transition-shadow cursor-move ${isSelected ? 'ring-2 ring-white/50 shadow-2xl' : 'hover:bg-white/5'}`}>
-                    <div style={{ backgroundColor: boxColor }}
-                      className="absolute -top-6 left-[-2px] text-[10px] text-white px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shadow select-none">
-                      {ann.label}
+                  // Compute fill color with opacity
+                  const r = parseInt(boxColor.slice(1, 3), 16);
+                  const g = parseInt(boxColor.slice(3, 5), 16);
+                  const b = parseInt(boxColor.slice(5, 7), 16);
+                  const fillColor = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`;
+
+                  return (
+                    <div key={ann.id}
+                      style={{
+                        left: `${left}px`, top: `${top}px`,
+                        width: `${width}px`, height: `${height}px`,
+                        borderColor: boxColor,
+                        backgroundColor: fillColor,
+                      }}
+                      className={`absolute border-2 transition-shadow ${isSelected ? 'ring-2 ring-white/50 shadow-2xl' : 'hover:bg-white/5'}`}>
+                      {/* Label */}
+                      <div style={{ backgroundColor: boxColor }}
+                        className="absolute -top-6 left-[-2px] text-[10px] text-white px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shadow select-none">
+                        {ann.label}
+                      </div>
+                      {/* Resize handles (only when selected) */}
+                      {isSelected && RESIZE_HANDLES.map(h => (
+                        <div key={h.mode}
+                          onPointerDown={e => handleStartResize(ann.id, h.mode, e)}
+                          style={h.style}
+                          className={`absolute w-3 h-3 bg-white border border-slate-900 rounded-sm shadow z-30 ${h.className}`} />
+                      ))}
                     </div>
-                    {isSelected && (
-                      <div
-                        onMouseDown={e => {
-                          e.stopPropagation();
-                          setIsDragging(true);
-                          setDraggedAnnId(ann.id);
-                          setDragStart(getCanvasMouseCoords(e));
-                          setDragInitialBox({ x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2 });
-                          setDragMode('se');
-                        }}
-                        className="absolute bottom-[-5px] right-[-5px] w-3 h-3 bg-white border border-slate-900 rounded-sm cursor-se-resize shadow" />
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
 
-              {isDrawing && (
-                <div style={{
-                  left: `${Math.min(drawStart.x, drawEnd.x)}px`,
-                  top: `${Math.min(drawStart.y, drawEnd.y)}px`,
-                  width: `${Math.abs(drawEnd.x - drawStart.x)}px`,
-                  height: `${Math.abs(drawEnd.y - drawStart.y)}px`,
-                }} className="absolute border-2 border-dashed border-indigo-400 bg-indigo-500/10 pointer-events-none" />
-              )}
-            </div>
-          )}
+                {/* Drawing preview */}
+                {isDrawing && (
+                  <div style={{
+                    left: `${Math.min(drawStart.x, drawEnd.x)}px`,
+                    top: `${Math.min(drawStart.y, drawEnd.y)}px`,
+                    width: `${Math.abs(drawEnd.x - drawStart.x)}px`,
+                    height: `${Math.abs(drawEnd.y - drawStart.y)}px`,
+                  }} className="absolute border-2 border-dashed border-indigo-400 bg-indigo-500/10 pointer-events-none" />
+                )}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* ── Dimension tooltip ──────────────────────────────────────── */}
+        {dimensionTooltip && (
+          <div style={{
+            position: 'fixed',
+            left: dimensionTooltip.x,
+            top: dimensionTooltip.y,
+            transform: 'translate(10px, 10px)',
+          }} className="bg-slate-900/95 border border-slate-700 text-slate-200 text-[10px] font-mono px-2 py-1 rounded-lg shadow-xl pointer-events-none z-50">
+            {dimensionTooltip.w} × {dimensionTooltip.h}px
+          </div>
+        )}
+
       </section>
 
-      {/* Right sidebar */}
+      {/* ── Context Menu ────────────────────────────────────────────── */}
+      {contextMenu && (
+        <div className="fixed z-50"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={e => e.preventDefault()}>
+          <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl py-1.5 min-w-[160px] backdrop-blur"
+            role="menu">
+            <button onClick={() => handleContextMenuAction('delete')}
+              className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors">
+              <IconTrash /> Delete
+            </button>
+            <button onClick={() => handleContextMenuAction('duplicate')}
+              className="w-full text-left px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 flex items-center gap-2 transition-colors">
+              <IconCopy /> Duplicate
+            </button>
+            {classes.length > 1 && (
+              <>
+                <div className="h-[1px] bg-slate-800 mx-3 my-1" />
+                <p className="px-4 py-1 text-[9px] text-slate-500 uppercase tracking-wider font-bold">Change Class</p>
+                {classes.map(cls => (
+                  <button key={cls.id} onClick={() => handleContextMenuAction(cls.name)}
+                    className="w-full text-left px-4 py-1.5 text-xs text-slate-300 hover:bg-slate-800 flex items-center gap-2 transition-colors">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
+                    {cls.name}
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Click-away to close context menu */}
+      {contextMenu && (
+        <div className="fixed inset-0 z-40" onClick={() => setContextMenu(null)} />
+      )}
+
+      {/* ── Right sidebar ───────────────────────────────────────────── */}
       <aside className="w-80 border-l border-slate-850 bg-slate-900/40 backdrop-blur-md flex flex-col flex-shrink-0">
+
         {/* Active class selection */}
         <div className="p-5 border-b border-slate-850 space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Active Drawing Class</h3>
           <div className="flex flex-wrap gap-2">
-            {classes.map(cls => (
+            {classes.map((cls, i) => (
               <button key={cls.id} onClick={() => setActiveClass(cls.name)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border ${
                   activeClass === cls.name ? 'bg-indigo-600/20 border-indigo-500 text-indigo-200' : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
                 }`}>
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: cls.color }} />
                 {cls.name}
+                {/* Hotkey badge */}
+                {i < 9 && (
+                  <span className="ml-0.5 text-[8px] bg-slate-800/80 text-slate-500 px-1 rounded font-mono">{i + 1}</span>
+                )}
               </button>
             ))}
             {classes.length === 0 && <p className="text-slate-500 text-xs italic">No project classes defined.</p>}
@@ -440,13 +458,42 @@ export default function Editor({
 
         {/* Annotations list */}
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="p-4 border-b border-slate-850">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Annotations ({annotations.length})</h3>
+          <div className="p-4 border-b border-slate-850 space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Annotations ({annotations.length})</h3>
+            </div>
+            {/* Class filter */}
+            {uniqueClassNames.length > 1 && (
+              <div className="flex flex-wrap gap-1">
+                <button onClick={() => setAnnotationFilter(new Set())}
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
+                    annotationFilter.size === 0 ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-500 hover:text-slate-300 border border-slate-800'
+                  }`}>
+                  All
+                </button>
+                {uniqueClassNames.map(name => (
+                  <button key={name}
+                    onClick={() => {
+                      const next = new Set(annotationFilter);
+                      if (next.has(name)) next.delete(name); else next.add(name);
+                      setAnnotationFilter(next);
+                    }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
+                      annotationFilter.has(name) ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-500 hover:text-slate-300 border border-slate-800'
+                    }`}>
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-            {annotations.length === 0 ? (
-              <p className="text-slate-500 text-xs italic text-center py-6">No annotations created yet.</p>
-            ) : annotations.map(ann => {
+            {filteredAnnotations.length === 0 ? (
+              <p className="text-slate-500 text-xs italic text-center py-6">
+                {annotations.length === 0 ? 'No annotations created yet.' : 'No annotations match filter.'}
+              </p>
+            ) : filteredAnnotations.map(ann => {
               const isSelected = ann.id === selectedAnnId;
               return (
                 <div key={ann.id} onClick={() => setSelectedAnnId(ann.id)}
@@ -470,9 +517,7 @@ export default function Editor({
                     <button onClick={e => { e.stopPropagation(); handleDeleteAnnotation(ann.id); }}
                       aria-label={`Delete ${ann.label || 'annotation'}`} title="Delete annotation"
                       className="text-slate-500 hover:text-red-400 p-1 rounded transition-colors">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      <IconTrash />
                     </button>
                   </div>
                   <div className="flex items-center justify-between mt-2.5 text-[10px] text-slate-550 font-mono">
@@ -482,6 +527,13 @@ export default function Editor({
               );
             })}
           </div>
+        </div>
+
+        {/* Keyboard shortcuts hint */}
+        <div className="px-4 py-2 border-t border-slate-850/50">
+          <p className="text-[9px] text-slate-600 font-mono leading-relaxed">
+            D=draw S=select 1-9=class Del=delete Space+drag=pan Scroll=zoom Cmd+Z=undo
+          </p>
         </div>
 
         {/* Bottom save bar */}
@@ -500,6 +552,9 @@ export default function Editor({
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-500/10 active:scale-95 transition-all">
               Save & Finish
             </button>
+          )}
+          {isDirty && (
+            <p className="text-[10px] text-amber-400/60 text-center mt-2 font-mono">● Unsaved changes</p>
           )}
         </div>
       </aside>
