@@ -97,7 +97,7 @@ export default function ProjectGallery({
     ? 'Add at least one class first'
     : totalImages === 0
       ? 'Upload some images first'
-      : 'Configure and run AI auto-labeling';
+      : 'Configure and run AI grounding';
 
   return (
     <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 px-6 py-6 max-w-7xl mx-auto w-full">
@@ -152,7 +152,7 @@ export default function ProjectGallery({
         {stats && isRunning && (
           <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl mb-6 flex flex-col gap-2">
             <div className="flex justify-between items-center text-xs">
-              <span className="font-semibold text-amber-400 animate-pulse">Running Batch Auto-Labeling...</span>
+              <span className="font-semibold text-amber-400 animate-pulse">Running Batch Grounding...</span>
               <span className="font-mono text-slate-450">{stats.labeled_images} / {stats.total_images} Labeled</span>
             </div>
             <div className="w-full bg-slate-955 rounded-full h-1.5 overflow-hidden border border-slate-850">
@@ -276,7 +276,7 @@ export default function ProjectGallery({
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          {isBatchLabeling ? 'Labeling…' : 'Auto-Label with AI'}
+          {isBatchLabeling ? 'Grounding…' : 'Run Grounding'}
         </button>
       </div>
 

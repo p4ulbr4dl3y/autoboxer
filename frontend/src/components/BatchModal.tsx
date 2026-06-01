@@ -71,7 +71,7 @@ export default function BatchModal({ isOpen, classes, stats, onClose, onConfirm 
 
   return (
     <div
-      role="dialog" aria-modal="true" aria-label="Auto-Label Settings"
+      role="dialog" aria-modal="true" aria-label="AI Grounding Settings"
       onClick={onClose}
       className="fixed inset-0 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
       <div onClick={e => e.stopPropagation()}
@@ -82,8 +82,8 @@ export default function BatchModal({ isOpen, classes, stats, onClose, onConfirm 
           </svg>
         </button>
 
-        <h3 className="text-lg font-bold mb-1 text-slate-100">AI Auto-Label Project</h3>
-        <p className="text-slate-400 text-xs mb-6">Configure LocateAnything model parameters for this run.</p>
+        <h3 className="text-lg font-bold mb-1 text-slate-100">AI Grounding Project</h3>
+        <p className="text-slate-400 text-xs mb-6">Configure LocateAnything visual grounding parameters for this run.</p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Target Images Selection */}
