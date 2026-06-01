@@ -318,20 +318,21 @@ export function useEditor(
     const imgW = renderedWidth * z;
     const imgH = renderedHeight * z;
 
-    if (z >= 1) {
-      const minX = imgW >= cw ? cw - imgW : (cw - imgW) / 2;
-      const maxX = imgW >= cw ? 0 : (cw - imgW) / 2;
-      const minY = imgH >= ch ? ch - imgH : (ch - imgH) / 2;
-      const maxY = imgH >= ch ? 0 : (ch - imgH) / 2;
-      return {
-        x: Math.min(maxX, Math.max(minX, px)),
-        y: Math.min(maxY, Math.max(minY, py)),
-      };
-    } else {
-      const cx = (cw - imgW) / 2;
-      const cy = (ch - imgH) / 2;
-      return { x: cx, y: cy };
-    }
+    // Figma-style infinite canvas: Allow free panning at all zoom levels.
+    // To ensure the image is never completely lost, we require at least a small
+    // portion (e.g. 60px or the image size itself if it is smaller) to remain visible inside the container.
+    const minOverlapX = Math.min(60, imgW);
+    const minOverlapY = Math.min(60, imgH);
+
+    const minX = -imgW + minOverlapX;
+    const maxX = cw - minOverlapX;
+    const minY = -imgH + minOverlapY;
+    const maxY = ch - minOverlapY;
+
+    return {
+      x: Math.min(maxX, Math.max(minX, px)),
+      y: Math.min(maxY, Math.max(minY, py)),
+    };
   }, [renderedWidth, renderedHeight, containerDim]);
 
   const handleResetZoom = useCallback(() => {
