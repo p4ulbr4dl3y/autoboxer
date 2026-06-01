@@ -1,144 +1,54 @@
-# Autoboxer Agent Workspace
+# CLAUDE.md
 
-This workspace contains **Autoboxer**, an AI-assisted visual grounding and object-detection image labeling platform built for Apple Silicon.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Autoboxer is a local AI-assisted object-detection labeling tool for Apple Silicon. A FastAPI backend wraps the MLX 4-bit quant of LocateAnything-3B (`mlx-community/LocateAnything-3B-4bit`) to auto-generate bounding boxes; a React/Vite frontend provides the dashboard, gallery, and bounding-box editor.
+
+## Commands
+
+Run both services together: `./start.sh` (backend on :8000, frontend on :5173).
+
+Backend (run from `backend/`, uses `uv`):
+- `uv run main.py` — start API server (uvicorn, reloads on `app/` changes)
+- `uv run python -m pytest` — run all tests (use `pytest path::test_name` for one)
+- `uv run ruff check` / `uv run ruff format` — lint / format
+
+Frontend (run from `frontend/`):
+- `npm run dev` — Vite dev server
+- `npm run build` — `tsc -b && vite build`
+- `npm run lint` — ESLint
+- `npx vitest run` — unit/component tests (jsdom); `npx vitest run src/components/__tests__/Editor.test.tsx` for one
+- `npx playwright install && npx playwright test` — E2E (`frontend/e2e/`); spins up its own dev server
+
+## Critical: mlx-vlm fork dependency
+
+LocateAnything is **not** in released `mlx-vlm`. `backend/pyproject.toml` pins a fork via `[tool.uv.sources]` (`git = "https://github.com/beshkenadze/mlx-vlm", rev = "feat/locateanything-3b"`). The model load fails without it — never replace it with PyPI `mlx-vlm`.
 
 ## Architecture
 
-- **Backend**: FastAPI web server wrapping the MLX mixed 4/8-bit quant of LocateAnything-3B (`mlx-community/LocateAnything-3B-4bit`). Handles sequential grounding class-by-class, image storage, SQLite state management, and dataset exports (YOLO / COCO).
-- **Frontend**: React + TypeScript + Vite + Tailwind CSS dark-mode dashboard and single-image bounding-box annotator.
+### Backend (`backend/app/`)
+FastAPI app (`app/main.py`) with a `lifespan` that creates SQLite tables, ensures `DATA_DIR`, and **pre-warms the model** on startup. Routers are mounted under `/api/v1` (except the legacy `pipeline.py` `/label*` endpoints). SQLite DB and uploaded images live in `backend/` (`autoboxer.db`, `data/`); paths come from `app/config.py`.
 
-## Project Structure
-
-### Backend (`backend/app/` & `backend/tests/`)
-```
-app/
-├── config.py           # Paths (BASE_DIR, DATA_DIR, DATABASE_FILE) and model config
-├── main.py             # FastAPI app setup, CORS, lifespan, router registration
-├── database.py         # SQLAlchemy engine, session factory, get_db dependency
-├── db_models.py        # ORM models: Project, ClassModel, ImageModel, Annotation
-├── models.py           # Pydantic schemas for request/response validation
-├── pipeline.py         # ModelManager singleton + run_pipeline inference logic
-├── utils.py            # visualize_predictions helper (PIL drawing)
-└── routers/
-    ├── projects.py     # CRUD projects, stats
-    ├── classes.py      # CRUD class categories
-    ├── images.py       # Image upload, list, serve files
-    ├── annotations.py  # Get/update annotations per image
-    ├── labeling.py     # Single-image and batch auto-labeling
-    ├── export.py       # YOLO and COCO dataset export
-    └── pipeline.py     # Legacy /label and /label-visualize endpoints
-
-tests/
-├── conftest.py         # SQLite test DB overrides, fastapi test client, Model mocks
-├── test_projects.py    # CRUD projects, stats, duplicates, cascades
-├── test_labeling.py    # Auto-labeling, overwrite/append logic, batch processing
-└── test_export.py      # YOLO dataset.yaml/coordinate normalizer & COCO JSON validators
-```
+- `pipeline.py` — `ModelManager` is a thread-safe **singleton** that lazy-loads model/processor once and caches them. `run_pipeline(image_path, prompt)` runs one grounding query, parses the model's `<ref>...</ref><box><x1><y1><x2><y2></box>` text output via regex, and rescales the 0–1000 normalized coords to pixels.
+- `routers/labeling.py` — the core flow. `_run_labeling_on_image` is shared by single-image (`POST /images/{id}/auto-label`) and batch (`POST /projects/{id}/auto-label-all`, runs as a `BackgroundTasks` job). Key behaviors:
+  - **One model call per class.** When no manual prompt is given, it loops over each target class and runs that class's own `prompt` (falling back to `Locate {name}.`). This sequential class-by-class grounding is the central design choice — it avoids label ambiguity.
+  - `mode="overwrite"` deletes that class's existing annotations first; otherwise appends. `box_id`s are re-indexed to stay contiguous.
+  - Image `status` cycles `unlabeled` → `in_progress` → `labeled`/`unlabeled`. Batch jobs set/clear `project.batch_in_progress`, which the frontend polls.
+- Data model (`db_models.py`): `Project` → `ClassModel` (each with own `color` + grounding `prompt`) and `ImageModel` → `Annotation` (pixel `x1,y1,x2,y2` + `label`). Cascades delete children.
 
 ### Frontend (`frontend/src/`)
-```
-src/
-├── App.tsx             # View router + hook orchestration
-├── types/index.ts      # TypeScript interfaces
-├── api/client.ts       # Centralized API client
-├── test/
-│   └── setup.ts        # Testing setup file (jest-dom import)
-├── hooks/
-│   ├── useProjects.ts  # Project list, stats, CRUD logic
-│   └── useEditor.ts    # Editor canvas state
-└── components/
-    ├── Header.tsx           # Top navigation bar
-    ├── Dashboard.tsx        # Project cards grid
-    ├── CreateProjectModal.tsx # New project form with class/prompt editor
-    ├── ProjectGallery.tsx   # Image grid, upload, class manager, batch labeling
-    ├── BatchModal.tsx       # Batch auto-label settings modal
-    ├── Editor.tsx           # Canvas annotator + thumbnails + AI inspector sidebar
-    └── __tests__/           # Vitest unit & component tests
-        ├── Header.test.tsx
-        ├── ConfirmModal.test.tsx
-        ├── CreateProjectModal.test.tsx
-        ├── BatchModal.test.tsx
-        └── Editor.test.tsx
+React 19 + react-router-dom 7 + Tailwind 4. Routing is defined in `main.tsx` via `createBrowserRouter`:
+`App` (global modals + shared state) → `AppLayout` → pages `DashboardPage` / `ProjectGalleryPage` / `EditorPage` (`projects/:projectId/images/:imageId`).
 
-e2e/                         # Playwright E2E integration test suite
-└── autoboxer.spec.ts        # Complete user flow spec
-```
+- Shared state flows through `context/AppContext.tsx` (provided in `App.tsx`), not prop drilling — projects, images, classes, stats, and the global delete/error `ConfirmModal`s all live there.
+- `api/client.ts` — single typed `api` object; all calls hit `http://localhost:8000`. Types in `types/`.
+- `hooks/` (`useProjects`, `useEditor`) hold list/CRUD and canvas state. `components/` are presentational (`Editor`, `ProjectGallery`, `Dashboard`, modals).
 
-## Custom Class Prompts Feature
-Each label class category maintains its own distinct visual grounding prompt (e.g. `Locate cat.`, `Locate dog.`). The backend executes these queries sequentially class-by-class, resolving grounding coordinates without semantic ambiguity. Prompts are editable:
-1. At project initialization (using an interactive list editor).
-2. Inside the gallery sidebar (via auto-saving input fields).
+> Note: `AGENTS.md` describes an older flat `App.tsx`-as-router layout. The live structure (above) uses `pages/`, `layouts/`, and `context/` — trust the code.
 
-## How to Run
+## Conventions
 
-### 1. Backend (FastAPI + MLX)
-The backend uses Python and `uv` for package/runtime management.
-```bash
-cd backend
-# Run server (default port 8000)
-uv run main.py
-```
-*Note: LocateAnything-3B-4bit runs locally on Apple Silicon via MLX.*
-
-### mlx-vlm Dependency
-LocateAnything support is **not yet in a released `mlx-vlm`**. The project depends on a
-fork with the `locateanything` model implementation:
-```toml
-# backend/pyproject.toml
-mlx-vlm = { git = "https://github.com/beshkenadze/mlx-vlm", branch = "feat/locateanything-3b" }
-```
-The backend will fail to load the model without this fork. Do **not** override it with the
-stock `mlx-vlm` from PyPI.
-
-### 2. Frontend (React + Vite)
-```bash
-cd frontend
-# Install dependencies
-npm install
-# Run development server (default port 5173)
-npm run dev
-```
-
-## Testing & Quality Control
-
-### Backend Tests (pytest)
-Backend tests run on a separate SQLite database file `test_autoboxer.db` which is dynamically managed and wiped between tests. MLX Model load is fully mocked via pytest fixtures.
-```bash
-cd backend
-uv run python -m pytest
-```
-
-### Frontend Tests (Vitest)
-Unit and component tests verify React components under the `jsdom` testing environment.
-```bash
-cd frontend
-npx vitest run
-```
-
-### End-to-End Tests (Playwright)
-E2E tests simulate actual browser interactions (creating project, drag-drawing coordinates, downloading ZIPs).
-```bash
-cd frontend
-npx playwright install
-npx playwright test
-```
-
-### Linting & Formatting
-- **Backend**: Ruff is used for fast linting/formatting.
-  ```bash
-  cd backend
-  uv run ruff check   # Lint checks
-  uv run ruff format  # Format source code
-  ```
-- **Frontend**: ESLint checks code quality rules.
-  ```bash
-  cd frontend
-  npm run lint
-  ```
-
-## Git Commit Rules
-This workspace uses **Conventional Commits** for version control. Commits should follow the format: `<type>: <description>` where `<type>` can be:
-- `feat`: New feature or capability (e.g., `feat: add class-specific prompts support`)
-- `fix`: Bug fix (e.g., `fix: resolve bounding box rendering offset`)
-- `chore`: Refactoring, dependencies, configurations (e.g., `chore: update database models`)
-- `docs`: Documentation updates (e.g., `docs: update setup instructions in AGENTS.md`)
+- Commits follow **Conventional Commits**: `feat:`, `fix:`, `chore:`, `docs:`.
+- Backend tests use a separate SQLite file and **mock the MLX model** via `tests/conftest.py` fixtures — never load the real model in tests.
