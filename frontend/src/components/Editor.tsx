@@ -276,7 +276,6 @@ export default function Editor({
           onContextMenu={e => e.preventDefault()}
           className={`relative w-full h-full select-none touch-none overflow-hidden bg-transparent ${cursorClass}`}>
           <div
-            className="border border-slate-800 shadow-2xl rounded-md bg-slate-950/60 overflow-hidden"
             style={{
               transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
               transformOrigin: '0 0',
@@ -286,9 +285,12 @@ export default function Editor({
               left: 0,
               top: 0,
             }}>
+            {/* Decorative border and shadow overlay that does not affect coordinate box model sizing */}
+            <div className="absolute inset-0 border border-slate-800/80 rounded-md shadow-2xl pointer-events-none z-10" />
+
             <img ref={imageRef} src={api.images.fileUrl(currentImageId)} alt=""
               style={{ width: '100%', height: '100%' }}
-              className="block pointer-events-none" />
+              className="block pointer-events-none rounded-md" />
 
             {renderedWidth > 0 && renderedHeight > 0 && (
               <div className="absolute inset-0 w-full h-full pointer-events-auto z-20 overflow-hidden">
