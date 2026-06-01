@@ -80,14 +80,15 @@ interface EditorProps {
   setImages: React.Dispatch<React.SetStateAction<ImageItem[]>>;
   onError?: (title: string, message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onBeforeNavigate?: () => void;
 }
 
 export default function Editor({
-  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange,
+  currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange, onBeforeNavigate,
 }: EditorProps) {
 
   const { state, actions, currentImage, currentImageIndex, handleStartResize } = useEditor(
-    currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange,
+    currentImageId, images, classes, onSaveAndExit, onImageChange, setImages, onError, onDirtyChange, onBeforeNavigate,
   );
 
   const {
@@ -164,7 +165,7 @@ export default function Editor({
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
           {images.map(img => (
             <div key={img.id}
-              onClick={async () => { const saved = await handleSaveAnnotations(); if (saved) onImageChange(img.id); }}
+              onClick={async () => { const saved = await handleSaveAnnotations(); if (saved) { onDirtyChange?.(false); onBeforeNavigate?.(); onImageChange(img.id); } }}
               className={`p-1.5 rounded-lg border cursor-pointer hover:border-slate-700 transition-all ${
                 img.id === currentImageId ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-855 bg-slate-900/30'
               }`}>

@@ -190,6 +190,7 @@ export function useEditor(
   setImages: React.Dispatch<React.SetStateAction<ImageItem[]>>,
   onError?: (title: string, message: string) => void,
   onDirtyChange?: (dirty: boolean) => void,
+  onBeforeNavigate?: () => void,
 ) {
   const currentImage = images.find(img => img.id === currentImageId);
   const currentImageIndex = images.findIndex(img => img.id === currentImageId);
@@ -363,19 +364,20 @@ export function useEditor(
   const handleNextImage = useCallback(async () => {
     const saved = await handleSaveAnnotations();
     if (saved && currentImageIndex < images.length - 1) {
-      // Explicitly clear dirty before navigation to prevent blocker race condition
       onDirtyChange?.(false);
+      onBeforeNavigate?.();
       onImageChange(images[currentImageIndex + 1].id);
     }
-  }, [handleSaveAnnotations, currentImageIndex, images, onImageChange, onDirtyChange]);
+  }, [handleSaveAnnotations, currentImageIndex, images, onImageChange, onDirtyChange, onBeforeNavigate]);
 
   const handlePrevImage = useCallback(async () => {
     const saved = await handleSaveAnnotations();
     if (saved && currentImageIndex > 0) {
       onDirtyChange?.(false);
+      onBeforeNavigate?.();
       onImageChange(images[currentImageIndex - 1].id);
     }
-  }, [handleSaveAnnotations, currentImageIndex, images, onImageChange, onDirtyChange]);
+  }, [handleSaveAnnotations, currentImageIndex, images, onImageChange, onDirtyChange, onBeforeNavigate]);
 
   // ── Coordinate helpers ──────────────────────────────────────────────────
 
