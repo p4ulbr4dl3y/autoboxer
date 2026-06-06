@@ -18,12 +18,12 @@ vi.mock('../../hooks/useEditor', () => ({
 
 describe('Editor Component', () => {
   const mockImages = [
-    { id: 1, project_id: 1, filename: 'cat.jpg', filepath: '/tmp/cat.jpg', width: 800, height: 600, status: 'unlabeled', created_at: '' }
+    { id: 1, project_id: 1, filename: 'cat.jpg', filepath: '/tmp/cat.jpg', width: 800, height: 600, status: 'unlabeled' as const, created_at: '' }
   ];
 
   const mockClasses = [
-    { id: 1, name: 'cat', color: '#34C759', prompt: 'Locate cats.', created_at: '' },
-    { id: 2, name: 'dog', color: '#FF3B30', prompt: 'Locate dogs.', created_at: '' }
+    { id: 1, project_id: 1, name: 'cat', color: '#34C759', prompt: 'Locate cats.', created_at: '' },
+    { id: 2, project_id: 1, name: 'dog', color: '#FF3B30', prompt: 'Locate dogs.', created_at: '' }
   ];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

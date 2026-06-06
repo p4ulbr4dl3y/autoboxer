@@ -5,8 +5,8 @@ import type { ClassCategory, ProjectStats } from '../../types';
 
 describe('BatchModal Component', () => {
   const mockClasses: ClassCategory[] = [
-    { id: 1, name: 'cat', color: '#FF0000', prompt: 'Locate cats.', created_at: '' },
-    { id: 2, name: 'dog', color: '#00FF00', prompt: 'Locate dogs.', created_at: '' },
+    { id: 1, project_id: 1, name: 'cat', color: '#FF0000', prompt: 'Locate cats.' },
+    { id: 2, project_id: 1, name: 'dog', color: '#00FF00', prompt: 'Locate dogs.' },
   ];
 
   const mockStats: ProjectStats = {
