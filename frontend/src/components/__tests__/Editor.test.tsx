@@ -48,7 +48,8 @@ describe('Editor Component', () => {
       panX: 0,
       panY: 0,
       isPanning: false,
-      spaceHeld: false,
+      isZooming: false,
+      activePointerCount: 0,
       isDrawing: false,
       drawStart: null,
       drawEnd: null,
@@ -84,8 +85,8 @@ describe('Editor Component', () => {
       setZoom: vi.fn(),
       setPanX: vi.fn(),
       setPanY: vi.fn(),
-      handleWheel: vi.fn(),
       handleResetZoom: vi.fn(),
+      handleSetZoomPreset: vi.fn(),
       handleAutoLabelImage: vi.fn(),
     };
 
@@ -173,5 +174,60 @@ describe('Editor Component', () => {
     const dogClassBtn = screen.getByText('dog').closest('button');
     fireEvent.click(dogClassBtn!);
     expect(mockActions.setActiveClass).toHaveBeenCalledWith('dog');
+  });
+
+  test('Save & Next button has the short label (no Enter hint)', () => {
+    render(
+      <Editor
+        currentImageId={1}
+        images={mockImages}
+        classes={mockClasses}
+        onSaveAndExit={() => {}}
+        onImageChange={() => {}}
+        setImages={() => {}}
+      />
+    );
+
+    // The single-image fixture puts us on the last image, so "Save & Finish" is shown.
+    // Verify the "(Enter)" suffix is no longer present in either button label.
+    expect(screen.queryByText(/Save & Next \(Enter\)/)).not.toBeInTheDocument();
+  });
+
+  test('does not render the keyboard shortcuts hint block', () => {
+    render(
+      <Editor
+        currentImageId={1}
+        images={mockImages}
+        classes={mockClasses}
+        onSaveAndExit={() => {}}
+        onImageChange={() => {}}
+        setImages={() => {}}
+      />
+    );
+
+    // The hint block was removed; the legacy short hint string must not be in the DOM.
+    expect(screen.queryByText(/D=draw S=select 1-9=class/)).not.toBeInTheDocument();
+  });
+
+  test('renders resize handles with enlarged hit area (24×24 wrapper)', () => {
+    mockState.selectedAnnId = 1;
+    render(
+      <Editor
+        currentImageId={1}
+        images={mockImages}
+        classes={mockClasses}
+        onSaveAndExit={() => {}}
+        onImageChange={() => {}}
+        setImages={() => {}}
+      />
+    );
+
+    // 8 resize handles per selected annotation. We have 1 selected.
+    const handles = document.querySelectorAll('.cursor-nw-resize, .cursor-n-resize, .cursor-ne-resize, .cursor-e-resize, .cursor-se-resize, .cursor-s-resize, .cursor-sw-resize, .cursor-w-resize');
+    expect(handles.length).toBe(8);
+    // Each wrapper is 24×24 (w-6 h-6) — verify the class is present on at least one.
+    const wrapper = handles[0] as HTMLElement;
+    expect(wrapper.className).toMatch(/w-6/);
+    expect(wrapper.className).toMatch(/h-6/);
   });
 });

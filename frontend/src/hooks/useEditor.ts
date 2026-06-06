@@ -24,7 +24,8 @@ export interface EditorState {
   panX: number;
   panY: number;
   isPanning: boolean;
-  spaceHeld: boolean;
+  isZooming: boolean;
+  activePointerCount: number;
 
   // Drawing
   isDrawing: boolean;
@@ -85,12 +86,9 @@ export interface EditorActions {
   setZoom: (z: number | ((prev: number) => number)) => void;
   setPanX: (x: number | ((prev: number) => number)) => void;
   setPanY: (y: number | ((prev: number) => number)) => void;
-  handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
   handleResetZoom: () => void;
+  handleSetZoomPreset: (preset: 'fit' | '100' | '200') => void;
   handleAutoLabelImage: () => Promise<void>;
-
-  // Space key tracking
-  setSpaceHeld: (v: boolean) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -238,8 +236,33 @@ export function useEditor(
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
-  const [spaceHeld, setSpaceHeld] = useState(false);
+  const [isZooming, setIsZooming] = useState(false);
+  const [activePointerCount, setActivePointerCount] = useState(0);
+  const zoomRef = useRef(1);
+  const zoomIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+
+  // Last known pointer coords (used to anchor zoom to cursor for buttons / Cmd+1/2)
+  const lastPointerEventRef = useRef<{ clientX: number; clientY: number } | null>(null);
+
+  // Multi-touch bookkeeping
+  const pointersRef = useRef<Map<number, { x: number; y: number; type: string }>>(new Map());
+  // For two-finger pan/pinch/swipe gesture
+  const multiTouchRef = useRef<{
+    startMidX: number; startMidY: number;
+    startDist: number;
+    startZoom: number;
+    startPanX: number; startPanY: number;
+    startTime: number;
+    triggeredSwipe: boolean;
+    tapCandidate: { annId: number | string; midX: number; midY: number; startTime: number } | null;
+  } | null>(null);
+
+  const markZooming = useCallback(() => {
+    setIsZooming(true);
+    if (zoomIdleTimerRef.current) clearTimeout(zoomIdleTimerRef.current);
+    zoomIdleTimerRef.current = setTimeout(() => setIsZooming(false), 120);
+  }, []);
 
   // ── Canvas sizing ───────────────────────────────────────────────────────
   const [renderedWidth, setRenderedWidth] = useState(0);
@@ -325,6 +348,7 @@ export function useEditor(
 
   const handleResetZoom = useCallback(() => {
     setZoom(1);
+    markZooming();
     const cw = containerDim.width;
     const ch = containerDim.height;
     if (cw > 0 && ch > 0 && currentImage?.width && currentImage?.height) {
@@ -344,7 +368,40 @@ export function useEditor(
       setPanX(0);
       setPanY(0);
     }
-  }, [currentImage, containerDim]);
+  }, [currentImage, containerDim, markZooming]);
+
+  /**
+   * Apply a zoom preset: 'fit' (fit-to-screen), '100' (100%), '200' (200%).
+   * For '100'/'200' the zoom anchors at the last known pointer position (or container center).
+   */
+  const handleSetZoomPreset = useCallback((preset: 'fit' | '100' | '200') => {
+    const cw = containerDim.width;
+    const ch = containerDim.height;
+    if (cw === 0 || ch === 0) return;
+    markZooming();
+
+    if (preset === 'fit') {
+      handleResetZoom();
+      return;
+    }
+
+    const targetZoom = preset === '100' ? 1 : 2;
+    const rect = imageContainerRef.current?.getBoundingClientRect();
+    const lastPointer = lastPointerEventRef.current;
+    const anchorX = lastPointer && rect
+      ? lastPointer.clientX - rect.left
+      : cw / 2;
+    const anchorY = lastPointer && rect
+      ? lastPointer.clientY - rect.top
+      : ch / 2;
+    const scale = targetZoom / zoom;
+    setZoom(targetZoom);
+    setPanX(anchorX - (anchorX - panX) * scale);
+    setPanY(anchorY - (anchorY - panY) * scale);
+  }, [containerDim, handleResetZoom, markZooming, panX, panY, zoom]);
+
+  // Keep zoomRef in sync (used by pinch handler to avoid stale closure)
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
 
   // Clamp pan after every zoom/pan change to keep the image in view
   useEffect(() => {
@@ -435,7 +492,6 @@ export function useEditor(
 
   // rAF throttle for pointer moves
   const rafRef = useRef<number | null>(null);
-  const lastPointerEventRef = useRef<{ clientX: number; clientY: number } | null>(null);
 
   // ── UI toggles ──────────────────────────────────────────────────────────
   const [annotationFilter, setAnnotationFilter] = useState<Set<string>>(new Set());
@@ -592,7 +648,21 @@ export function useEditor(
     return null;
   }, [currentImage, annotations, toOriginalCoords]);
 
-  // ── Pointer event handlers (unified mouse+touch) ────────────────────────
+  // ── Pointer event handlers (unified mouse+touch with multi-touch) ──────
+
+  /** Compute midpoint + distance of the two active touch pointers, or null if <2. */
+  const getMultiTouch = useCallback(() => {
+    const pts = Array.from(pointersRef.current.values()).filter(p => p.type === 'touch');
+    if (pts.length < 2) return null;
+    const a = pts[0];
+    const b = pts[1];
+    const midX = (a.x + b.x) / 2;
+    const midY = (a.y + b.y) / 2;
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return { midX, midY, dist };
+  }, []);
 
   const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     // Right-click → context menu
@@ -611,10 +681,55 @@ export function useEditor(
     // Close context menu on any other click
     setContextMenu(null);
 
-    // Space + click → pan
-    if (spaceHeld || e.button === 1) {
+    // Middle-click → pan (desktop with mouse fallback)
+    if (e.button === 1) {
       setIsPanning(true);
       panStartRef.current = { x: e.clientX, y: e.clientY, panX, panY };
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
+
+    // Track this pointer for multi-touch bookkeeping
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
+    setActivePointerCount(pointersRef.current.size);
+
+    // Two-finger (touch) gesture: pan + pinch + swipe + tap
+    if (e.pointerType === 'touch' && pointersRef.current.size === 2) {
+      // Cancel any in-progress single-pointer drawing/dragging (the other finger was
+      // its owner; this finger becomes part of the multi-touch gesture instead).
+      if (isDrawing) {
+        setIsDrawing(false);
+        setDimensionTooltip(null);
+      }
+      if (isDragging) {
+        setIsDragging(false);
+        draggedAnnIdRef.current = null;
+      }
+      const mt = getMultiTouch();
+      if (mt) {
+        const rect = imageContainerRef.current?.getBoundingClientRect();
+        const midImgX = rect ? (mt.midX - rect.left - panX) / zoom : 0;
+        const midImgY = rect ? (mt.midY - rect.top - panY) / zoom : 0;
+        const tappedAnn = findAnnotationAtCoords(
+          Math.max(0, Math.min(renderedWidth, midImgX)),
+          Math.max(0, Math.min(renderedHeight, midImgY)),
+        );
+        multiTouchRef.current = {
+          startMidX: mt.midX,
+          startMidY: mt.midY,
+          startDist: mt.dist,
+          startZoom: zoom,
+          startPanX: panX,
+          startPanY: panY,
+          startTime: performance.now(),
+          triggeredSwipe: false,
+          tapCandidate: tappedAnn
+            ? { annId: tappedAnn.id, midX: mt.midX, midY: mt.midY, startTime: performance.now() }
+            : null,
+        };
+        setIsPanning(true);
+        markZooming();
+      }
       e.currentTarget.setPointerCapture(e.pointerId);
       return;
     }
@@ -641,10 +756,65 @@ export function useEditor(
         setSelectedAnnId(null);
       }
     }
-  }, [spaceHeld, panX, panY, canvasMode, getImageCoords, findAnnotationAtCoords]);
+  }, [panX, panY, canvasMode, getImageCoords, findAnnotationAtCoords, getMultiTouch, isDrawing, isDragging, markZooming, renderedWidth, renderedHeight, zoom]);
 
-  const handlePointerMoveLogic = useCallback((e: { clientX: number; clientY: number }) => {
-    // Panning
+  const handlePointerMoveLogic = useCallback((e: { clientX: number; clientY: number; pointerId?: number; pointerType?: string }) => {
+    // Update tracked position for this pointer (used by multi-touch)
+    if (e.pointerId !== undefined && pointersRef.current.has(e.pointerId)) {
+      const existing = pointersRef.current.get(e.pointerId)!;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY, type: existing.type });
+    }
+
+    // Two-finger pan + pinch + swipe
+    if (multiTouchRef.current && (e.pointerType === 'touch' || pointersRef.current.size >= 2)) {
+      const mt = getMultiTouch();
+      if (mt) {
+        const m = multiTouchRef.current;
+        const rect = imageContainerRef.current?.getBoundingClientRect();
+        const anchorX = rect ? m.startMidX - rect.left : 0;
+        const anchorY = rect ? m.startMidY - rect.top : 0;
+
+        // Pan from start: midpoint delta applied additively from start
+        const dx = mt.midX - m.startMidX;
+        const dy = mt.midY - m.startMidY;
+
+        // Swipe detection: fast horizontal motion, horizontally dominant
+        if (!m.triggeredSwipe) {
+          const dt = performance.now() - m.startTime;
+          if (
+            Math.abs(dx) > 80 &&
+            Math.abs(dx) > Math.abs(dy) * 1.5 &&
+            dt < 500
+          ) {
+            m.triggeredSwipe = true;
+            // Finger moved left (dx < 0) → next image, like Mac Preview
+            if (dx < 0) void handleNextImage();
+            else void handlePrevImage();
+          }
+        }
+
+        // Tap candidate is invalidated as soon as motion exceeds threshold
+        if (m.tapCandidate && Math.hypot(dx, dy) > 8) {
+          m.tapCandidate = null;
+        }
+
+        if (mt.dist > 4) {
+          const scale = mt.dist / m.startDist;
+          const newZoom = Math.max(0.2, Math.min(8, m.startZoom * scale));
+          const zoomScale = newZoom / m.startZoom;
+          setPanX(anchorX - (anchorX - m.startPanX) * zoomScale + dx);
+          setPanY(anchorY - (anchorY - m.startPanY) * zoomScale + dy);
+          setZoom(newZoom);
+          markZooming();
+        } else {
+          setPanX(m.startPanX + dx);
+          setPanY(m.startPanY + dy);
+        }
+        return;
+      }
+    }
+
+    // Single-pointer panning (middle-click drag)
     if (isPanning) {
       const dx = e.clientX - panStartRef.current.x;
       const dy = e.clientY - panStartRef.current.y;
@@ -693,7 +863,7 @@ export function useEditor(
         return { ...ann, ...newBox };
       }));
     }
-  }, [isPanning, isDrawing, isDragging, resizeMode, currentImage, getImageCoords, drawStart, dragStartRef, renderedWidth, renderedHeight]);
+  }, [isPanning, isDrawing, isDragging, resizeMode, currentImage, getImageCoords, drawStart, renderedWidth, renderedHeight, getMultiTouch, handleNextImage, handlePrevImage, markZooming]);
 
   const handleCanvasPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     lastPointerEventRef.current = e;
@@ -706,7 +876,35 @@ export function useEditor(
     });
   }, [handlePointerMoveLogic]);
 
-  const handleCanvasPointerUp = useCallback(() => {
+  const handleCanvasPointerUp = useCallback((e?: React.PointerEvent<HTMLDivElement>) => {
+    // Remove this pointer from the multi-touch map first
+    if (e && e.pointerId !== undefined) {
+      pointersRef.current.delete(e.pointerId);
+      setActivePointerCount(pointersRef.current.size);
+    }
+
+    // Two-finger tap completion: if the gesture ends here with little motion & a tap candidate
+    if (multiTouchRef.current && pointersRef.current.size < 2) {
+      const m = multiTouchRef.current;
+      const tap = m.tapCandidate;
+      if (tap) {
+        const dt = performance.now() - tap.startTime;
+        if (dt < 300) {
+          // Open the context menu at the tap location
+          setSelectedAnnId(tap.annId);
+          setContextMenu({ x: tap.midX, y: tap.midY, annId: tap.annId });
+        }
+      }
+      multiTouchRef.current = null;
+      setIsPanning(false);
+      return;
+    }
+
+    // If a multi-touch is still active (one finger up, one down), don't finalize
+    if (pointersRef.current.size >= 2) {
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       return;
@@ -795,24 +993,44 @@ export function useEditor(
   }, [annotations, currentImage, pushHistory]);
 
   // ── Zoom with wheel ─────────────────────────────────────────────────────
-  // Handler is exposed for use via onWheel in the component.
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
+  // Cmd/Meta+scroll → zoom to cursor. Plain scroll → pan.
+  // We use a non-passive listener so we can preventDefault (React 17+ onWheel is passive).
+  useEffect(() => {
     const container = imageContainerRef.current;
     if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
 
-    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-    setZoom(prevZoom => {
-      const newZoom = Math.max(0.2, Math.min(8, prevZoom * zoomFactor));
-      const scale = newZoom / prevZoom;
-      setPanX(prev => mouseX - (mouseX - prev) * scale);
-      setPanY(prev => mouseY - (mouseY - prev) * scale);
-      return newZoom;
-    });
-  }, []);
+    const onWheel = (e: WheelEvent) => {
+      // Only intercept wheel events that originated on the container itself
+      if (!container.contains(e.target as Node)) return;
+      e.preventDefault();
+
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      lastPointerEventRef.current = { clientX: e.clientX, clientY: e.clientY };
+
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom toward the cursor (gentle per-tick step for trackpad comfort)
+        const factor = e.deltaY < 0 ? 1.06 : 0.944;
+        setZoom(prevZoom => {
+          const newZoom = Math.max(0.2, Math.min(8, prevZoom * factor));
+          const scale = newZoom / prevZoom;
+          setPanX(prev => mouseX - (mouseX - prev) * scale);
+          setPanY(prev => mouseY - (mouseY - prev) * scale);
+          return newZoom;
+        });
+        markZooming();
+      } else {
+        // Pan (works for both vertical and horizontal scroll deltas)
+        setPanX(prev => prev - e.deltaX);
+        setPanY(prev => prev - e.deltaY);
+        markZooming();
+      }
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [markZooming]);
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
@@ -820,10 +1038,9 @@ export function useEditor(
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (document.querySelector('[role="dialog"]')) return;
 
-      // Space → hold for pan mode
+      // Space → prevent page scroll while editor has focus (legacy pan-via-space removed)
       if (e.code === 'Space' && !e.repeat) {
         e.preventDefault();
-        setSpaceHeld(true);
         return;
       }
 
@@ -835,10 +1052,11 @@ export function useEditor(
         return;
       }
 
-      // Reset zoom
-      if ((e.metaKey || e.ctrlKey) && e.key === '0') {
+      // Zoom presets: Cmd+0 = fit, Cmd+1 = 100%, Cmd+2 = 200%
+      if ((e.metaKey || e.ctrlKey) && (e.key === '0' || e.key === '1' || e.key === '2')) {
         e.preventDefault();
-        handleResetZoom();
+        const preset = e.key === '0' ? 'fit' : e.key === '1' ? '100' : '200';
+        handleSetZoomPreset(preset as 'fit' | '100' | '200');
         return;
       }
 
@@ -875,69 +1093,13 @@ export function useEditor(
       }
     };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        setSpaceHeld(false);
-      }
-    };
-
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
     };
   }, [selectedAnnId, annotations, currentImageId, currentImageIndex, images, classes,
       undo, redo, handleDeleteAnnotation, handleNextImage, handlePrevImage,
-      handleSaveAnnotations, handleResetZoom, onSaveAndExit]);
-
-  // ── Pinch-to-zoom (two-finger touch) ────────────────────────────────────
-  const pinchRef = useRef({ dist: 0, zoom: 1, midX: 0, midY: 0 });
-
-  useEffect(() => {
-    const container = imageContainerRef.current;
-    if (!container) return;
-
-    const getTouchDist = (touches: TouchList) => {
-      if (touches.length < 2) return 0;
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      return Math.sqrt(dx * dx + dy * dy);
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const rect = container.getBoundingClientRect();
-        pinchRef.current = {
-          dist: getTouchDist(e.touches),
-          zoom: zoom,
-          midX: (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left,
-          midY: (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top,
-        };
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const newDist = getTouchDist(e.touches);
-        const scale = newDist / pinchRef.current.dist;
-        const newZoom = Math.max(0.2, Math.min(8, pinchRef.current.zoom * scale));
-        const zoomScale = newZoom / pinchRef.current.zoom;
-        setPanX(prev => pinchRef.current.midX - (pinchRef.current.midX - prev) * zoomScale);
-        setPanY(prev => pinchRef.current.midY - (pinchRef.current.midY - prev) * zoomScale);
-        setZoom(newZoom);
-      }
-    };
-
-    container.addEventListener('touchstart', handleTouchStart, { passive: false });
-    container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    return () => {
-      container.removeEventListener('touchstart', handleTouchStart);
-      container.removeEventListener('touchmove', handleTouchMove);
-    };
-  }, [zoom]);
+      handleSaveAnnotations, handleResetZoom, handleSetZoomPreset, onSaveAndExit]);
 
   // Cleanup rAF on unmount
   useEffect(() => {
@@ -963,7 +1125,7 @@ export function useEditor(
   const state: EditorState = {
     annotations, selectedAnnId, canvasMode, activeClass, isDirty,
     canUndo, canRedo,
-    zoom, panX, panY, isPanning, spaceHeld,
+    zoom, panX, panY, isPanning, isZooming, activePointerCount,
     isDrawing, drawStart, drawEnd,
     isDragging, resizeMode,
     annotationFilter,
@@ -981,8 +1143,8 @@ export function useEditor(
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     imageContainerRef, imageRef, updateRenderedDimensions,
-    setZoom, setPanX, setPanY, handleWheel, handleResetZoom,
-    setSpaceHeld, handleAutoLabelImage,
+    setZoom, setPanX, setPanY, handleResetZoom, handleSetZoomPreset,
+    handleAutoLabelImage,
   };
 
   return { state, actions, currentImage, currentImageIndex, handleStartResize };

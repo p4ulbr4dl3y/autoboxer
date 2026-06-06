@@ -5,16 +5,18 @@ import type { ClassCategory, ImageItem } from '../types';
 import { useAppContext } from '../context/AppContext';
 
 // ─── Resize handle positions ─────────────────────────────────────────────────
-
+// Visible dot is 10×10 (w-2.5 h-2.5). The transparent hit-area is 24×24 around it
+// so trackpad users have a generous target. We use two layers: a 24×24 wrapper
+// (with the resize cursor) and a 10×10 visual child.
 const RESIZE_HANDLES: { mode: ResizeMode; className: string; style: React.CSSProperties }[] = [
-  { mode: 'nw', className: 'cursor-nw-resize', style: { top: -5, left: -5 } },
-  { mode: 'n',  className: 'cursor-n-resize',  style: { top: -5, left: '50%', transform: 'translateX(-50%)' } },
-  { mode: 'ne', className: 'cursor-ne-resize', style: { top: -5, right: -5 } },
-  { mode: 'e',  className: 'cursor-e-resize',  style: { top: '50%', right: -5, transform: 'translateY(-50%)' } },
-  { mode: 'se', className: 'cursor-se-resize', style: { bottom: -5, right: -5 } },
-  { mode: 's',  className: 'cursor-s-resize',  style: { bottom: -5, left: '50%', transform: 'translateX(-50%)' } },
-  { mode: 'sw', className: 'cursor-sw-resize', style: { bottom: -5, left: -5 } },
-  { mode: 'w',  className: 'cursor-w-resize',  style: { top: '50%', left: -5, transform: 'translateY(-50%)' } },
+  { mode: 'nw', className: 'cursor-nw-resize', style: { top: -12, left: -12 } },
+  { mode: 'n',  className: 'cursor-n-resize',  style: { top: -12, left: '50%', transform: 'translateX(-50%)' } },
+  { mode: 'ne', className: 'cursor-ne-resize', style: { top: -12, right: -12 } },
+  { mode: 'e',  className: 'cursor-e-resize',  style: { top: '50%', right: -12, transform: 'translateY(-50%)' } },
+  { mode: 'se', className: 'cursor-se-resize', style: { bottom: -12, right: -12 } },
+  { mode: 's',  className: 'cursor-s-resize',  style: { bottom: -12, left: '50%', transform: 'translateX(-50%)' } },
+  { mode: 'sw', className: 'cursor-sw-resize', style: { bottom: -12, left: -12 } },
+  { mode: 'w',  className: 'cursor-w-resize',  style: { top: '50%', left: -12, transform: 'translateY(-50%)' } },
 ];
 
 // ─── SVG Icons ───────────────────────────────────────────────────────────────
@@ -97,7 +99,7 @@ export default function Editor({
   const {
     annotations, selectedAnnId, canvasMode, activeClass, isDirty,
     canUndo, canRedo,
-    zoom, panX, panY, isPanning, spaceHeld,
+    zoom, panX, panY, isPanning, isZooming, activePointerCount,
     isDrawing, drawStart, drawEnd,
     isDragging, resizeMode,
     annotationFilter,
@@ -115,7 +117,7 @@ export default function Editor({
     handleDeleteAnnotation, handleChangeSelectedClass, handleDuplicateAnnotation,
     handleSaveAnnotations, handleNextImage, handlePrevImage,
     imageContainerRef, imageRef,
-    setZoom, setPanX, setPanY, handleWheel, handleResetZoom,
+    setZoom, setPanX, setPanY, handleResetZoom,
     handleAutoLabelImage,
   } = actions;
 
@@ -131,11 +133,11 @@ export default function Editor({
   }, [annotations]);
 
   const cursorClass = useMemo(() => {
-    if (spaceHeld || isPanning) return 'cursor-grab';
+    if (isPanning || activePointerCount >= 2) return 'cursor-grab';
     if (canvasMode === 'draw') return 'cursor-crosshair';
     if (isDragging && resizeMode !== 'move') return cursorForResizeMode(resizeMode);
     return 'cursor-default';
-  }, [spaceHeld, isPanning, canvasMode, isDragging, resizeMode]);
+  }, [isPanning, activePointerCount, canvasMode, isDragging, resizeMode]);
 
   // ── Context menu handler ──────────────────────────────────────────────
 
@@ -239,18 +241,19 @@ export default function Editor({
             const container = imageContainerRef.current;
             if (!container) return;
             const rect = container.getBoundingClientRect();
+            // Anchor at the last known cursor position; fallback to container center.
             const cx = rect.width / 2;
             const cy = rect.height / 2;
-            const newZoom = Math.min(8, zoom * 1.25);
+            const newZoom = Math.min(8, zoom * 1.15);
             const scale = newZoom / zoom;
             setPanX(cx - (cx - panX) * scale);
             setPanY(cy - (cy - panY) * scale);
             setZoom(newZoom);
-          }} title="Zoom In"
+          }} title="Zoom In (Cmd+scroll up)"
             className="p-2 rounded-lg text-slate-400 hover:text-white transition-all">
             <IconZoomIn />
           </button>
-          <button onClick={handleResetZoom} title="Reset Zoom (Cmd+0)"
+          <button onClick={handleResetZoom} title="Fit to Screen (Cmd+0)"
             className="px-2 py-2 rounded-lg text-[10px] text-slate-500 hover:text-white font-mono transition-all">
             {Math.round(zoom * 100)}%
           </button>
@@ -260,12 +263,12 @@ export default function Editor({
             const rect = container.getBoundingClientRect();
             const cx = rect.width / 2;
             const cy = rect.height / 2;
-            const newZoom = Math.max(0.2, zoom * 0.8);
+            const newZoom = Math.max(0.2, zoom * 0.87);
             const scale = newZoom / zoom;
             setPanX(cx - (cx - panX) * scale);
             setPanY(cy - (cy - panY) * scale);
             setZoom(newZoom);
-          }} title="Zoom Out"
+          }} title="Zoom Out (Cmd+scroll down)"
             className="p-2 rounded-lg text-slate-400 hover:text-white transition-all">
             <IconZoomOut />
           </button>
@@ -294,8 +297,8 @@ export default function Editor({
           onPointerDown={handleCanvasPointerDown}
           onPointerMove={handleCanvasPointerMove}
           onPointerUp={handleCanvasPointerUp}
+          onPointerCancel={handleCanvasPointerUp}
           onDoubleClick={handleResetZoom}
-          onWheel={handleWheel}
           onContextMenu={e => e.preventDefault()}
           className={`relative w-full h-full select-none touch-none overflow-hidden bg-transparent ${cursorClass}`}>
           <div
@@ -307,6 +310,8 @@ export default function Editor({
               position: 'absolute',
               left: 0,
               top: 0,
+              transition: isZooming ? 'none' : 'transform 150ms cubic-bezier(0.2, 0, 0, 1)',
+              willChange: 'transform',
             }}>
             {/* Decorative border and shadow overlay that does not affect coordinate box model sizing */}
             <div className="absolute inset-0 border border-slate-800/80 rounded-md shadow-2xl pointer-events-none z-10" />
@@ -346,12 +351,15 @@ export default function Editor({
                         className="absolute top-0 left-0 text-[9px] text-white px-1.5 py-0.5 rounded-br font-mono font-bold whitespace-nowrap shadow select-none z-10">
                         {ann.label}
                       </div>
-                      {/* Resize handles (only when selected) */}
+                      {/* Resize handles (only when selected). Wrapper is 24×24 for a generous
+                          trackpad target; the inner 10×10 dot is the visible handle. */}
                       {isSelected && RESIZE_HANDLES.map(h => (
                         <div key={h.mode}
                           onPointerDown={e => handleStartResize(ann.id, h.mode, e)}
                           style={h.style}
-                          className={`absolute w-2.5 h-2.5 bg-white border-2 border-slate-800 rounded-full shadow-md z-30 transition-transform hover:scale-125 ${h.className}`} />
+                          className={`absolute w-6 h-6 flex items-center justify-center z-30 ${h.className}`}>
+                          <div className="w-2.5 h-2.5 bg-white border-2 border-slate-800 rounded-full shadow-md transition-transform hover:scale-125" />
+                        </div>
                       ))}
                     </div>
                   );
@@ -545,13 +553,6 @@ export default function Editor({
           </div>
         </div>
 
-        {/* Keyboard shortcuts hint */}
-        <div className="px-4 py-2 border-t border-slate-850/50">
-          <p className="text-[9px] text-slate-600 font-mono leading-relaxed">
-            D=draw S=select 1-9=class Del=delete Space+drag=pan Scroll=zoom Cmd+Z=undo
-          </p>
-        </div>
-
         {/* Bottom save bar */}
         <div className="p-4 border-t border-slate-850 bg-slate-950/80">
           <button onClick={async () => { const saved = await handleSaveAnnotations(); if (saved) onSaveAndExit(); }}
@@ -561,7 +562,7 @@ export default function Editor({
           {currentImageIndex < images.length - 1 ? (
             <button onClick={handleNextImage}
               className="w-full bg-white hover:bg-slate-200 active:scale-95 text-slate-950 font-bold py-2.5 rounded-xl text-xs shadow-md transition-all">
-              Save & Next (Enter)
+              Save & Next
             </button>
           ) : (
             <button onClick={async () => { const saved = await handleSaveAnnotations(); if (saved) onSaveAndExit(); }}
